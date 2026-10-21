@@ -51,3 +51,17 @@ export function useCoinDetail(id: string, initialData: CoinDetailResponse | null
     ...pollingOptions,
   });
 }
+
+/**
+ * The shared markets snapshot without polling, for features like the command
+ * palette and compare page. It reuses the dashboard's cached copy when there
+ * is one, and fetches only while `enabled`.
+ */
+export function useMarketsSnapshot(enabled = true) {
+  return useQuery({
+    queryKey: ["markets"],
+    queryFn: ({ signal }) => fetchFromApi<MarketsResponse>("/api/markets", signal),
+    enabled,
+    staleTime: POLL_INTERVAL_MS,
+  });
+}
