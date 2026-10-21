@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { CompareView, MAX_COMPARED } from "@/components/compare/compare-view";
+import { CompareView } from "@/components/compare/compare-view";
 import { PageShell } from "@/components/page-shell";
 import { isValidCoinId } from "@/shared/coin-id";
+import { MAX_COMPARED } from "@/shared/compare";
 
 export const metadata: Metadata = { title: "Compare" };
 
