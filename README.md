@@ -8,6 +8,8 @@ A dashboard of the top 50 cryptocurrencies by market capitalisation. Prices upda
 - USD, EUR and GBP, with 24h changes correctly restated in each currency and the conversion rate always shown.
 - Search, category filter, sorting, a persistent watchlist, 7-day sparklines, and asset pages with an interactive 7-day chart.
 - A market heatmap view: tiles sized by market cap and coloured by 24h change, grouped by category, with keyboard-accessible tiles and hover details.
+- A ⌘K / Ctrl+K command palette (or `/`) to jump to any asset or switch currency, from any page.
+- A compare page (`/compare?ids=bitcoin,ethereum`) that overlays up to five assets' 7-day performance in their brand colours. The URL is shareable.
 - Animated segmented tabs (built with [Motion](https://motion.dev)) that are a native radio group underneath, and that respect reduced motion.
 - Purposeful motion: prices flash green or red when they change, rows glide when re-sorted, and charts draw in. All of it respects reduced motion.
 - Responsive and accessible: keyboard-operable controls, sort state exposed to screen readers, and live regions that don't spam.

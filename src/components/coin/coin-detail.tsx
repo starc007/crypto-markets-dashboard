@@ -164,6 +164,12 @@ function CoinDetailView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/compare?ids=${coin.id},${coin.id === "bitcoin" ? "ethereum" : "bitcoin"}`}
+            className="inline-flex h-9 items-center rounded-lg border border-border bg-surface px-3 text-sm text-muted shadow-card transition-colors hover:text-fg"
+          >
+            Compare
+          </Link>
           <CurrencySwitcher value={currency} onChange={setCurrency} fx={data.fx} />
           <WatchToggle
             assetName={coin.name}
