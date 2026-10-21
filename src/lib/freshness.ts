@@ -7,7 +7,8 @@ export type Freshness = "live" | "delayed" | "stale";
  * slack; anything older means refreshes are failing or the client is offline.
  */
 const LIVE_GRACE_MS = 90_000;
-const STALE_AFTER_INTERVALS = 3;
+/** Shared with the server, which stops serving cached data unrefreshed past this age. */
+export const STALE_AFTER_INTERVALS = 3;
 
 /** An asset's own price is "lagging" when CoinGecko hasn't updated it for this long. */
 export const QUOTE_LAG_THRESHOLD_MS = 60 * 60_000;

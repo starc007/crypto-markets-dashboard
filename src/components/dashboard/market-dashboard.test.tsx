@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -245,6 +245,16 @@ describe("MarketDashboard", () => {
 
     expect(await screen.findByText(/can't reach the server/)).toBeInTheDocument();
     expect(within(rowFor("Bitcoin")).getByText("$83,321.00")).toBeInTheDocument();
+  });
+
+  it("says the user is offline when polling pauses for lack of a connection", async () => {
+    renderDashboard();
+    onlineManager.setOnline(false);
+    await act(() => vi.advanceTimersByTimeAsync(30_000));
+
+    expect(await screen.findByText(/You're offline/)).toBeInTheDocument();
+    expect(within(rowFor("Bitcoin")).getByText("$83,321.00")).toBeInTheDocument();
+    onlineManager.setOnline(true);
   });
 
   it("shows an error, not empty or zeroed prices, when there is no data at all", async () => {

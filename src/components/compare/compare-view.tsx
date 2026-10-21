@@ -4,27 +4,26 @@ import { useQueries } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState, type KeyboardEvent } from "react";
-import { useMarketsSnapshot } from "@/hooks/use-market-data";
+import { historyQuery, useMarketsSnapshot } from "@/hooks/use-market-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
-import { fetchFromApi } from "@/lib/api-client";
 import { formatDuration } from "@/lib/format";
 import { alignPerformance } from "@/lib/performance";
 import { searchAssets } from "@/lib/search";
-import type { CoinDetailResponse, MarketCoin } from "@/shared/market";
+import { MAX_COMPARED } from "@/shared/compare";
+import type { CoinHistoryResponse, MarketCoin } from "@/shared/market";
 import { AssetAvatar } from "../ui/asset-avatar";
 import { ErrorState } from "../ui/error-state";
 import { SearchIcon } from "../ui/icons";
 import { CompareChart, type CompareSeries } from "./compare-chart";
 
-export const MAX_COMPARED = 5;
 const DEFAULT_COUNT = 3;
 const FULL_WEEK_HOURS = 7 * 24 - 1;
 
 /**
  * Compares up to five assets' 7-day performance. The selection lives in the
  * URL (`/compare?ids=bitcoin,ethereum`), so a comparison can be shared. Hourly
- * histories come from the asset endpoints, which serve the cached snapshot:
- * comparing costs no upstream quota.
+ * histories come from the cached snapshot, keyed to the same snapshot as the
+ * names and colours, so comparing costs no upstream quota.
  */
 export function CompareView({ initialIds }: { initialIds: string[] }) {
   const router = useRouter();
@@ -53,32 +52,28 @@ export function CompareView({ initialIds }: { initialIds: string[] }) {
     router.replace(next.length ? `/compare?ids=${next.join(",")}` : "/compare", { scroll: false });
   }
 
-  const details = useQueries({
-    queries: ids.map((id) => ({
-      queryKey: ["coin", id],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        fetchFromApi<CoinDetailResponse>(`/api/coins/${encodeURIComponent(id)}`, signal),
-      staleTime: 60_000,
-    })),
-  });
+  const fetchedAt = markets?.meta.fetchedAt;
+  const histories = useQueries({ queries: ids.map((id) => historyQuery(id, fetchedAt)) });
 
-  const ready = details.every((q) => q.data);
+  const ready = fetchedAt !== undefined && histories.every((q) => q.data);
   const compared = useMemo(() => {
     if (!ready) return null;
-    const withHistory = details
-      .map((q): CoinDetailResponse => q.data!)
-      .filter((d): d is CoinDetailResponse & { sparkline7d: number[] } => d.sparkline7d !== null);
-    const { series, spanHours } = alignPerformance(withHistory.map((d) => d.sparkline7d));
-    const lines: CompareSeries[] = withHistory.map((d, i) => ({
-      id: d.coin.id,
-      symbol: d.coin.symbol,
-      name: d.coin.name,
-      color: d.coin.accent.display,
+    const withHistory = histories
+      .map((q): CoinHistoryResponse => q.data!)
+      .filter((h): h is CoinHistoryResponse & { prices: number[] } => h.prices !== null)
+      .map((h) => ({ prices: h.prices, coin: byId.get(h.id) }))
+      .filter((h): h is { prices: number[]; coin: MarketCoin } => h.coin !== undefined);
+    const { series, spanHours } = alignPerformance(withHistory.map((h) => h.prices));
+    const lines: CompareSeries[] = withHistory.map(({ coin }, i) => ({
+      id: coin.id,
+      symbol: coin.symbol,
+      name: coin.name,
+      color: coin.accent.display,
       values: series[i] ?? [],
     }));
-    const missing = details.length - withHistory.length;
-    return { lines, spanHours, missing, endTime: Date.parse(withHistory[0]?.meta.fetchedAt ?? "") };
-  }, [ready, details]);
+    const missing = histories.length - withHistory.length;
+    return { lines, spanHours, missing, endTime: Date.parse(fetchedAt) };
+  }, [ready, histories, byId, fetchedAt]);
 
   if (!markets && isError) {
     return <ErrorState error={error} onRetry={() => refetch()} retrying={isRefetching} />;

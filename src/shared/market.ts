@@ -68,12 +68,17 @@ export interface MarketsResponse {
   meta: SnapshotMeta;
 }
 
-export interface CoinDetailResponse {
-  coin: MarketCoin;
+/**
+ * Hourly history for one asset in a given snapshot. Prices and stats are not
+ * repeated here: every view reads those from `MarketsResponse`, so the same
+ * asset can never show two different prices on screen.
+ */
+export interface CoinHistoryResponse {
+  id: string;
+  /** The snapshot this history belongs to; matches `MarketsResponse.meta.fetchedAt`. */
+  fetchedAt: string;
   /** Roughly hourly USD prices for the last 7 days, oldest first. */
-  sparkline7d: number[] | null;
-  fx: FxSnapshot | null;
-  meta: SnapshotMeta;
+  prices: number[] | null;
 }
 
 export type ApiErrorCode = UpstreamErrorCode | "NOT_FOUND" | "BAD_REQUEST" | "INTERNAL";

@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useMemo, type CSSProperties } from "react";
 import { useCurrencyPreference, useDisplayCurrency } from "@/hooks/use-currency";
-import { useCoinDetail } from "@/hooks/use-market-data";
+import { useCoinHistory, useMarkets } from "@/hooks/use-market-data";
 import { useNow } from "@/hooks/use-now";
 import { useWatchlist } from "@/hooks/use-watchlist";
-import { ApiError } from "@/lib/api-client";
 import { accentVars } from "@/lib/color";
 import { toDisplayCoin } from "@/lib/currency-conversion";
 import {
@@ -20,9 +19,14 @@ import {
 import { quoteLagMs } from "@/lib/freshness";
 import { CATEGORIES } from "@/shared/categories";
 import type { Currency } from "@/shared/currency";
-import type { CoinDetailResponse } from "@/shared/market";
+import type { CoinHistoryResponse, MarketCoin, MarketsResponse } from "@/shared/market";
 import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
-import { FreshnessBanner, FreshnessIndicator, useFreshness } from "../freshness/freshness";
+import {
+  FreshnessBanner,
+  FreshnessIndicator,
+  useFreshness,
+  type ConnectionState,
+} from "../freshness/freshness";
 import { AssetAvatar } from "../ui/asset-avatar";
 import { FlashOnChange } from "../ui/flash-on-change";
 import { ErrorState } from "../ui/error-state";
@@ -45,21 +49,31 @@ function BackLink() {
 
 export function CoinDetail({
   id,
-  initialData,
+  initialMarkets,
+  initialHistory,
   initialCurrency,
 }: {
   id: string;
-  initialData: CoinDetailResponse | null;
+  initialMarkets: MarketsResponse | null;
+  initialHistory: CoinHistoryResponse | null;
   initialCurrency: Currency;
 }) {
-  const { data, error, isError, refetch, isRefetching } = useCoinDetail(id, initialData);
-  // The asset can drop out of the top 50 while the page is open.
-  const droppedOut = error instanceof ApiError && error.code === "NOT_FOUND";
+  // Prices come from the shared markets snapshot, exactly as on the dashboard.
+  const { data, error, isError, refetch, isRefetching, fetchStatus } = useMarkets(initialMarkets);
+  const history = useCoinHistory(id, data?.meta.fetchedAt, initialHistory);
+  const coin = data?.coins.find((c) => c.id === id);
 
   return (
     <div className="flex flex-col gap-6">
       <BackLink />
-      {droppedOut ? (
+      {!data ? (
+        isError ? (
+          <ErrorState error={error} onRetry={() => refetch()} retrying={isRefetching} />
+        ) : (
+          <CoinDetailSkeleton />
+        )
+      ) : !coin ? (
+        // The asset can drop out of the top 50 while the page is open.
         <div
           role="alert"
           className="rounded-xl border border-border bg-surface px-6 py-10 text-center"
@@ -67,41 +81,46 @@ export function CoinDetail({
           <p className="font-medium">This asset is no longer in the top 50.</p>
           <p className="mt-1 text-sm text-muted">We only track the current top 50 by market cap.</p>
         </div>
-      ) : data ? (
-        <CoinDetailView
-          data={data}
-          initialCurrency={initialCurrency}
-          clientError={isError ? error : null}
-        />
-      ) : isError ? (
-        <ErrorState error={error} onRetry={() => refetch()} retrying={isRefetching} />
       ) : (
-        <CoinDetailSkeleton />
+        <CoinDetailView
+          markets={data}
+          marketCoin={coin}
+          history={history.data?.prices ?? null}
+          historyLoading={history.isPending}
+          initialCurrency={initialCurrency}
+          connection={{ error: isError ? error : null, offline: fetchStatus === "paused" }}
+        />
       )}
     </div>
   );
 }
 
 function CoinDetailView({
-  data,
+  markets,
+  marketCoin,
+  history,
+  historyLoading,
   initialCurrency,
-  clientError,
+  connection,
 }: {
-  data: CoinDetailResponse & { receivedAt: number };
+  markets: MarketsResponse & { receivedAt: number };
+  marketCoin: MarketCoin;
+  history: number[] | null;
+  historyLoading: boolean;
   initialCurrency: Currency;
-  clientError: Error | null;
+  connection: ConnectionState;
 }) {
-  const { meta } = data;
-  const freshness = useFreshness(meta, data.receivedAt, clientError);
+  const { meta } = markets;
+  const freshness = useFreshness(meta, markets.receivedAt, connection);
   const { currency: requestedCurrency, setCurrency } = useCurrencyPreference(initialCurrency);
-  const display = useDisplayCurrency(requestedCurrency, data.fx);
+  const display = useDisplayCurrency(requestedCurrency, markets.fx);
   const { converter } = display;
   const { currency } = converter;
-  const coin = useMemo(() => toDisplayCoin(data.coin, converter), [data.coin, converter]);
+  const coin = useMemo(() => toDisplayCoin(marketCoin, converter), [marketCoin, converter]);
   // History is restated at today's rate; the FX move over 7 days is not modelled.
   const sparkline7d = useMemo(
-    () => data.sparkline7d?.map((usd) => converter.amount(usd)!) ?? null,
-    [data.sparkline7d, converter],
+    () => history?.map((usd) => converter.amount(usd)!) ?? null,
+    [history, converter],
   );
   const { watchlist, toggle } = useWatchlist();
   const now = useNow();
@@ -170,7 +189,7 @@ function CoinDetailView({
           >
             Compare
           </Link>
-          <CurrencySwitcher value={currency} onChange={setCurrency} fx={data.fx} />
+          <CurrencySwitcher value={currency} onChange={setCurrency} fx={markets.fx} />
           <WatchToggle
             assetName={coin.name}
             watched={watchlist.has(coin.id)}
@@ -195,7 +214,7 @@ function CoinDetailView({
           <PriceChange value={coin.change24hPct} className="text-lg" />
           <span className="text-sm text-muted">24h</span>
         </div>
-        <ConversionNote display={display} fx={data.fx} />
+        <ConversionNote display={display} fx={markets.fx} />
         {lag !== null && (
           <p className="text-sm text-warn">
             CoinGecko last updated this price {formatDuration(lag)} before our latest snapshot, so
@@ -212,6 +231,8 @@ function CoinDetailView({
             endTime={Date.parse(coin.lastUpdated ?? meta.fetchedAt)}
             assetName={coin.name}
           />
+        ) : historyLoading ? (
+          <div aria-busy="true" className="h-64 animate-pulse rounded-lg bg-surface-muted" />
         ) : (
           <p className="py-12 text-center text-sm text-muted">No 7-day history is available.</p>
         )}

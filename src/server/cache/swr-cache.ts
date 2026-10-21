@@ -8,6 +8,10 @@
  *   even when there is no value to serve. This stops a cold start during an
  *   outage from turning every incoming request into an upstream request.
  * - A failed refresh never discards the last good value.
+ * - Past `maxStaleMs`, a caller waits (up to `maxStaleWaitMs`) for the refresh
+ *   instead of being handed very old data, e.g. the first visitor after a
+ *   quiet night. If the refresh is slow or failing, they still get the old
+ *   value, clearly dated.
  *
  * Callers receive `fetchedAt` and the last failure with every read, so they
  * can tell users exactly how old the data is.
@@ -37,6 +41,10 @@ export interface SwrCacheOptions<T, E> {
   retryDelayMs: (error: E, consecutiveFailures: number) => number;
   /** Converts whatever the fetcher threw into the cache's error type. */
   toError: (thrown: unknown) => E;
+  /** Age beyond which a read waits for the refresh rather than serving stale data. */
+  maxStaleMs?: number;
+  /** Longest a read waits for that refresh. Defaults to 3 seconds. */
+  maxStaleWaitMs?: number;
   now?: () => number;
 }
 
@@ -48,10 +56,24 @@ export class CacheEmptyError<E> extends Error {
 }
 
 export interface SwrCache<T, E> {
-  /** Returns the current value, waiting only when there is nothing cached yet. */
+  /** Returns the current value, waiting only when there is nothing cached or it is very stale. */
   get(): Promise<CacheRead<T, E>>;
   /** Resolves once any in-flight refresh has settled. */
   settled(): Promise<void>;
+}
+
+const DEFAULT_MAX_STALE_WAIT_MS = 3_000;
+
+/** Resolves when `promise` settles or after `ms`, whichever comes first. */
+async function waitAtMost(promise: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    promise,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, ms);
+    }),
+  ]);
+  clearTimeout(timer);
 }
 
 export function createSwrCache<T, E>(options: SwrCacheOptions<T, E>): SwrCache<T, E> {
@@ -103,10 +125,13 @@ export function createSwrCache<T, E>(options: SwrCacheOptions<T, E>): SwrCache<T
         return read(entry);
       }
 
-      const isExpired = now() - entry.fetchedAt >= options.ttlMs;
-      if (isExpired && !inFlight && canAttempt()) {
-        // Serve what we have immediately; the refresh lands for later callers.
-        void refresh();
+      const age = now() - entry.fetchedAt;
+      if (age >= options.ttlMs && (inFlight || canAttempt())) {
+        const pending = inFlight ?? refresh();
+        if (options.maxStaleMs !== undefined && age >= options.maxStaleMs) {
+          await waitAtMost(pending, options.maxStaleWaitMs ?? DEFAULT_MAX_STALE_WAIT_MS);
+        }
+        // Otherwise serve what we have immediately; the refresh lands for later callers.
       }
       return read(entry);
     },

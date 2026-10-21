@@ -8,12 +8,13 @@ class FetchError extends Error {
   }
 }
 
-function setup() {
+function setup(extra: { maxStaleMs?: number; maxStaleWaitMs?: number } = {}) {
   let clock = 1_000_000;
   const fetcher = vi.fn<() => Promise<string>>();
   const cache = createSwrCache<string, FetchError>({
     fetcher,
     ttlMs: TTL,
+    ...extra,
     now: () => clock,
     toError: (e) => (e instanceof FetchError ? e : new FetchError()),
     retryDelayMs: (error, n) => Math.max(error.retryAfterMs ?? 0, 10_000 * 2 ** (n - 1)),
@@ -169,5 +170,25 @@ describe("createSwrCache", () => {
     const results = await Promise.allSettled(reads);
     expect(results.every((r) => r.status === "rejected")).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the refresh instead of serving data older than maxStaleMs", async () => {
+    const { cache, fetcher, advance } = setup({ maxStaleMs: 3 * TTL });
+    fetcher.mockResolvedValueOnce("v1");
+    await cache.get();
+
+    advance(3 * TTL);
+    fetcher.mockResolvedValueOnce("v2");
+    expect((await cache.get()).value).toBe("v2");
+  });
+
+  it("falls back to the old value if that refresh is too slow", async () => {
+    const { cache, fetcher, advance } = setup({ maxStaleMs: 3 * TTL, maxStaleWaitMs: 20 });
+    fetcher.mockResolvedValueOnce("v1");
+    await cache.get();
+
+    advance(3 * TTL);
+    fetcher.mockReturnValueOnce(new Promise(() => {}));
+    expect((await cache.get()).value).toBe("v1");
   });
 });

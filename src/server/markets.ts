@@ -1,7 +1,8 @@
 import "server-only";
+import { STALE_AFTER_INTERVALS } from "@/lib/freshness";
 import type { FxSnapshot } from "@/shared/currency";
 import type {
-  CoinDetailResponse,
+  CoinHistoryResponse,
   MarketsResponse,
   RefreshFailure,
   SnapshotMeta,
@@ -66,6 +67,8 @@ export function createMarketsSource(options: {
       return parsed;
     },
     ttlMs: options.refreshIntervalMs,
+    // Matches the age at which the UI calls data stale.
+    maxStaleMs: options.refreshIntervalMs * STALE_AFTER_INTERVALS,
     retryDelayMs,
     toError: logAndConvert("markets"),
     now: options.now,
@@ -174,18 +177,12 @@ export async function getMarkets(now = Date.now()): Promise<MarketsResponse> {
 }
 
 /** Returns null for ids outside the current top 50: we only serve what we already hold. */
-export async function getCoinDetail(
-  id: string,
-  now = Date.now(),
-): Promise<CoinDetailResponse | null> {
+export async function getCoinHistory(id: string): Promise<CoinHistoryResponse | null> {
   const snapshot = await readSnapshot();
-  const quote = snapshot.markets.value.quotes.find((q) => q.id === id);
-  if (!quote) return null;
-  const sparkline = snapshot.markets.value.sparklines.get(id) ?? null;
+  if (!snapshot.markets.value.quotes.some((q) => q.id === id)) return null;
   return {
-    coin: enrichQuote(quote, sparkline),
-    sparkline7d: sparkline,
-    fx: snapshot.fx,
-    meta: toMeta(snapshot, now),
+    id,
+    fetchedAt: new Date(snapshot.markets.fetchedAt).toISOString(),
+    prices: snapshot.markets.value.sparklines.get(id) ?? null,
   };
 }

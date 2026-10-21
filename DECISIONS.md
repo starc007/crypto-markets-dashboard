@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Next.js on one long-lived Node process acts as both UI and backend-for-frontend. The **server** owns the CoinGecko key, two fixed upstream requests, the caches, validation and the metadata join. The **browser** never calls CoinGecko: it polls `GET /api/markets` and `/api/coins/:id`, and owns view state (search, sort, filters, watchlist, currency). Pages are server-rendered with the cached snapshot, so data shows before JavaScript loads.
+Next.js on one long-lived Node process acts as both UI and backend-for-frontend. The **server** owns the CoinGecko key, two fixed upstream requests, the caches, validation and the metadata join. The **browser** never calls CoinGecko: it polls `GET /api/markets`, the **single source of prices** on every page (charts fetch history keyed to the same snapshot), and owns view state (search, sort, filters, watchlist, currency). Pages are server-rendered with the cached snapshot, so data shows before JavaScript loads.
 
 The API can't act as a proxy. It ignores request input, its upstream parameters are fixed in code, and it serves only ids already in the cached top 50.
 
@@ -23,6 +23,8 @@ Both are product decisions, so they live in a typed module ([`asset-metadata.ts`
   - Data is served from memory for 5 minutes. After that, the next request triggers a single background refresh that all callers share.
   - Failures keep the last good data and back off from 15 s up to 5 min, honouring `Retry-After`.
   - On a cold start during an outage, requests get a 503 without calling upstream again.
+  - Past 3 intervals old, a request waits up to 3 s for fresh data rather than serving stale data.
+  - A snapshot with under 90% of assets priced is rejected, so a systemic upstream change can't hide behind a page of dashes.
 - **Age:** clients compute age from server timestamps, so a wrong client clock can't make old data look fresh.
 - **Status:** **Up to date** until 6.5 min, **Delayed** until 15 min, then **Stale**, with the cause shown.
 
@@ -46,6 +48,7 @@ The **monthly quota** is the binding limit. A 4-minute refresh (11,160) or nativ
 - Colour and direction follow the _rounded_ change.
 - Category 24h change is computed from combined value, not averaged percentages.
 - Values are converted before sorting and totals, so everything on screen agrees.
+- The client never replaces a snapshot with an older one, and reports being offline as offline.
 
 The Vitest suite targets where bugs cost money: formatting, conversion maths, the quota projection, and cache behaviour on a fake clock. It also runs the real route handlers against a mocked CoinGecko, checking that 500 requests make 1 upstream call, the key never leaks, and outages, 429s, timeouts and bad payloads are handled. Component tests cover polling, stale and offline states, and the currency fallback.
 

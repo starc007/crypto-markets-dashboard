@@ -29,10 +29,17 @@ const PROVIDER_REASONS: Record<UpstreamErrorCode, string> = {
     "Our data provider sent data we couldn't verify, so we kept the last good prices.",
 };
 
+/** How this client's own connection to our server is doing. */
+export interface ConnectionState {
+  error: ApiError | Error | null;
+  /** True while requests are paused because the browser is offline. */
+  offline: boolean;
+}
+
 export function useFreshness(
   meta: SnapshotMeta,
   receivedAt: number,
-  clientError: ApiError | Error | null,
+  connection: ConnectionState,
 ): FreshnessState {
   const now = useNow();
   // Before mount, classify using the age reported in the response itself.
@@ -40,7 +47,9 @@ export function useFreshness(
   const freshness = classifyFreshness(ageMs, meta.refreshIntervalMs);
 
   let reason: string | null = null;
-  if (clientError) reason = "We can't reach the server. Check your connection.";
+  // Offline requests pause rather than fail, so this must be checked separately from errors.
+  if (connection.offline) reason = "You're offline. Prices will update when you reconnect.";
+  else if (connection.error) reason = "We can't reach the server. Check your connection.";
   else if (meta.lastRefreshFailure) reason = PROVIDER_REASONS[meta.lastRefreshFailure.code];
 
   return {
@@ -107,7 +116,7 @@ export function FreshnessBanner({ state }: { state: FreshnessState }) {
       ? "Prices are out of date. Don't rely on them for trading decisions."
       : freshness === "delayed"
         ? "Prices may be delayed."
-        : "Prices are current, but the latest refresh had a problem.";
+        : "Prices are current, but updates are interrupted.";
 
   const tone =
     freshness === "stale"

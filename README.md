@@ -55,7 +55,7 @@ The tests make no network calls: the upstream API is mocked with [MSW](https://m
 ```
 Browser ──poll every 30s──▶ /api/markets ─┐     in-process SWR caches, shared by all users
                                           ├─▶ markets ──≤1 call / 5 min──▶ CoinGecko /coins/markets
-Browser ──────────────────▶ /api/coins/:id┘   rates   ──≤1 call / 2 h────▶ CoinGecko /simple/price
+Browser ──────▶ /api/coins/:id/history┘   rates   ──≤1 call / 2 h────▶ CoinGecko /simple/price
 ```
 
 ```

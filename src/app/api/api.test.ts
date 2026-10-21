@@ -11,9 +11,9 @@ import {
   setMarketsSourceForTesting,
   type MarketsSource,
 } from "@/server/markets";
-import type { ApiErrorBody, CoinDetailResponse, MarketsResponse } from "@/shared/market";
+import type { ApiErrorBody, CoinHistoryResponse, MarketsResponse } from "@/shared/market";
 import fixture from "@/test/fixtures/coingecko-markets.json";
-import { GET as getCoin } from "./coins/[id]/route";
+import { GET as getHistory } from "./coins/[id]/history/route";
 import { GET as getMarkets } from "./markets/route";
 
 vi.mock("next/server", () => ({ connection: async () => {} }));
@@ -85,10 +85,10 @@ afterEach(async () => {
 });
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-const coinRequest = (id: string) =>
-  getCoin(new Request(`http://localhost/api/coins/${id}`), {
+const historyRequest = (id: string) =>
+  getHistory(new Request(`http://localhost/api/coins/${id}/history`), {
     params: Promise.resolve({ id }),
-  } as RouteContext<"/api/coins/[id]">);
+  } as RouteContext<"/api/coins/[id]/history">);
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
@@ -188,6 +188,23 @@ describe("GET /api/markets", () => {
     expect(body.meta.lastRefreshFailure?.code).toBe("INVALID_RESPONSE");
   });
 
+  it("rejects a snapshot where too many assets lost their price, keeping the last good one", async () => {
+    await getMarkets();
+    advance(REFRESH_MS);
+    // A systemic upstream change: every price arrives as a string.
+    upstream.respond = () =>
+      HttpResponse.json(
+        fixture.map((coin) => ({ ...coin, current_price: String(coin.current_price) })),
+      );
+    await getMarkets();
+    await settle();
+    await settle();
+
+    const body = await json<MarketsResponse>(await getMarkets());
+    expect(body.coins.every((coin) => coin.priceUsd !== null)).toBe(true);
+    expect(body.meta.lastRefreshFailure?.code).toBe("INVALID_RESPONSE");
+  });
+
   it("returns 503 with Retry-After on a cold start during an outage, without hammering upstream", async () => {
     upstream.respond = () => new HttpResponse("upstream down", { status: 502 });
 
@@ -274,27 +291,27 @@ describe("exchange rates", () => {
   });
 });
 
-describe("GET /api/coins/[id]", () => {
-  it("serves detail and 7-day history from the shared snapshot", async () => {
-    await getMarkets();
-    const response = await coinRequest("ethereum");
-    const body = await json<CoinDetailResponse>(response);
+describe("GET /api/coins/[id]/history", () => {
+  it("serves hourly history from the same snapshot as the market list", async () => {
+    const markets = await json<MarketsResponse>(await getMarkets());
+    const response = await historyRequest("ethereum");
+    const body = await json<CoinHistoryResponse>(response);
 
     expect(response.status).toBe(200);
-    expect(body.coin.id).toBe("ethereum");
-    expect(body.sparkline7d!.length).toBeGreaterThan(2);
+    expect(body.fetchedAt).toBe(markets.meta.fetchedAt);
+    expect(body.prices!.length).toBeGreaterThan(2);
     expect(upstream.calls).toHaveLength(1);
   });
 
   it("returns 404 for assets outside the top 50 without calling upstream", async () => {
     await getMarkets();
-    const response = await coinRequest("some-unlisted-token");
+    const response = await historyRequest("some-unlisted-token");
     expect(response.status).toBe(404);
     expect(upstream.calls).toHaveLength(1);
   });
 
   it("rejects malformed ids before touching the cache", async () => {
-    const response = await coinRequest("../../exchanges");
+    const response = await historyRequest("../../exchanges");
     expect(response.status).toBe(400);
     expect(upstream.calls).toHaveLength(0);
   });

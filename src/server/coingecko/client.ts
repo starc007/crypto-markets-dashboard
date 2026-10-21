@@ -64,11 +64,26 @@ async function getJson(url: URL, apiKey: string | undefined): Promise<unknown> {
   }
 }
 
+/**
+ * The share of the top 50 that must arrive with both a price and a market cap.
+ * Malformed fields degrade to null one at a time, which is right for a single
+ * odd asset but would hide a systemic change (say, prices sent as strings)
+ * behind a page of dashes and a "fresh" badge. Below this bar the whole
+ * snapshot is rejected, so the last good one stays on screen with a reason.
+ */
+export const MIN_COMPLETE_SHARE = 0.9;
+
 export async function fetchTopMarkets(apiKey: string | undefined): Promise<ParsedMarkets> {
   const parsed = parseMarkets(await getJson(buildMarketsUrl(), apiKey));
   if (!parsed || parsed.quotes.length === 0) {
-    // An empty or malformed payload must not replace a good snapshot.
     throw new UpstreamError("INVALID_RESPONSE", "CoinGecko returned no usable market data");
+  }
+  const complete = parsed.quotes.filter((q) => q.priceUsd !== null && q.marketCapUsd !== null);
+  if (complete.length < Math.ceil(TOP_N * MIN_COMPLETE_SHARE)) {
+    throw new UpstreamError(
+      "INVALID_RESPONSE",
+      `Only ${complete.length} of ${TOP_N} assets had a price and market cap`,
+    );
   }
   return parsed;
 }

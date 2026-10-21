@@ -20,7 +20,12 @@ import { CATEGORIES, CATEGORY_IDS } from "@/shared/categories";
 import type { Currency } from "@/shared/currency";
 import type { MarketsResponse } from "@/shared/market";
 import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
-import { FreshnessBanner, FreshnessIndicator, useFreshness } from "../freshness/freshness";
+import {
+  FreshnessBanner,
+  FreshnessIndicator,
+  useFreshness,
+  type ConnectionState,
+} from "../freshness/freshness";
 import { ErrorState } from "../ui/error-state";
 import { CategorySection } from "./category-section";
 import { DashboardSkeleton } from "./dashboard-skeleton";
@@ -34,7 +39,7 @@ interface MarketDashboardProps {
 }
 
 export function MarketDashboard({ initialData, initialCurrency }: MarketDashboardProps) {
-  const { data, error, isError, refetch, isRefetching } = useMarkets(initialData);
+  const { data, error, isError, refetch, isRefetching, fetchStatus } = useMarkets(initialData);
 
   if (!data) {
     return isError ? (
@@ -47,7 +52,7 @@ export function MarketDashboard({ initialData, initialCurrency }: MarketDashboar
     <MarketsView
       data={data}
       initialCurrency={initialCurrency}
-      clientError={isError ? error : null}
+      connection={{ error: isError ? error : null, offline: fetchStatus === "paused" }}
     />
   );
 }
@@ -55,11 +60,11 @@ export function MarketDashboard({ initialData, initialCurrency }: MarketDashboar
 function MarketsView({
   data,
   initialCurrency,
-  clientError,
+  connection,
 }: {
   data: MarketsResponse & { receivedAt: number };
   initialCurrency: Currency;
-  clientError: Error | null;
+  connection: ConnectionState;
 }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
@@ -67,7 +72,7 @@ function MarketsView({
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [view, setView] = useState<DashboardView>("table");
   const { watchlist, toggle } = useWatchlist();
-  const freshness = useFreshness(data.meta, data.receivedAt, clientError);
+  const freshness = useFreshness(data.meta, data.receivedAt, connection);
   const { currency: requestedCurrency, setCurrency } = useCurrencyPreference(initialCurrency);
   const display = useDisplayCurrency(requestedCurrency, data.fx);
   const { currency } = display.converter;
@@ -84,6 +89,11 @@ function MarketsView({
         sortCoins(filterCoins(coins, { query, category, watchlistOnly, watchlist }), sort),
       ),
     [coins, query, category, watchlistOnly, watchlist, sort],
+  );
+  // Only count watched assets that are still in the top 50; stored ids can outlive their asset.
+  const watchedCount = useMemo(
+    () => data.coins.filter((coin) => watchlist.has(coin.id)).length,
+    [data.coins, watchlist],
   );
   const visibleCount = CATEGORY_IDS.reduce((n, id) => n + visibleGroups[id].length, 0);
   const isFiltered = query.trim() !== "" || category !== "all" || watchlistOnly;
@@ -118,7 +128,7 @@ function MarketsView({
         onCategoryChange={setCategory}
         watchlistOnly={watchlistOnly}
         onWatchlistOnlyChange={setWatchlistOnly}
-        watchlistCount={watchlist.size}
+        watchlistCount={watchedCount}
         sort={sort}
         onSortChange={setSort}
         view={view}
@@ -137,12 +147,12 @@ function MarketsView({
           className="rounded-2xl border border-dashed border-border bg-surface/60 px-6 py-12 text-center"
         >
           <p className="font-medium">
-            {watchlistOnly && watchlist.size === 0
+            {watchlistOnly && watchedCount === 0
               ? "Your watchlist is empty."
               : "No assets match your filters."}
           </p>
           <p className="mt-1 text-sm text-muted">
-            {watchlistOnly && watchlist.size === 0
+            {watchlistOnly && watchedCount === 0
               ? "Star an asset to add it to your watchlist."
               : "Try a different name or symbol."}
           </p>
