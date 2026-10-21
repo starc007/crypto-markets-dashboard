@@ -14,7 +14,7 @@
 
 import type { Currency } from "@/shared/currency";
 
-export const LOCALE = "en-US";
+const LOCALE = "en-US";
 export const NOT_AVAILABLE = "—";
 const MINUS = "−";
 

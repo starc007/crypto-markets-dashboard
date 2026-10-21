@@ -127,12 +127,11 @@ describe("summarizeCategory", () => {
     expect(summary.change24hPct).toBeCloseTo(25, 10);
   });
 
-  it("excludes assets with missing values and reports how many", () => {
+  it("leaves assets with missing values out of the totals", () => {
     const summary = summarizeCategory([btc, usdt, shib]);
     expect(summary.count).toBe(3);
     expect(summary.totalMarketCap).toBe(1_780);
     expect(summary.change24hPct).toBeCloseTo(2, 10);
-    expect(summary.excludedCount).toBe(2);
   });
 
   it("returns nulls rather than zeros when nothing is known", () => {

@@ -2,7 +2,7 @@ import "server-only";
 import { UpstreamError, parseRetryAfter } from "./errors";
 import { parseFxRates, parseMarkets, type FxRates, type ParsedMarkets } from "./schema";
 
-export const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
+const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 export const TOP_N = 50;
 const REQUEST_TIMEOUT_MS = 10_000;
 

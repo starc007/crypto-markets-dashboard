@@ -15,6 +15,7 @@ import {
 } from "@/lib/heatmap";
 import { CATEGORIES, type CategoryId } from "@/shared/categories";
 import type { Currency } from "@/shared/currency";
+import { changeToneClass } from "../ui/change-tone";
 import { FlashOnChange } from "../ui/flash-on-change";
 import { Sparkline } from "../ui/sparkline";
 
@@ -66,7 +67,10 @@ export function MarketHeatmap({ groups, currency, isStale }: MarketHeatmapProps)
         ref={ref}
         className={`relative transition-[filter,opacity] duration-500 ${isStale ? "opacity-75 grayscale-[0.6]" : ""}`}
         style={{ height }}
-        onPointerLeave={() => setActiveId(null)}
+        // Keep the tooltip for a keyboard-focused tile when the pointer leaves.
+        onPointerLeave={(event) => {
+          if (!event.currentTarget.contains(document.activeElement)) setActiveId(null);
+        }}
       >
         {layout?.categories.map((category) => (
           <div
@@ -79,13 +83,14 @@ export function MarketHeatmap({ groups, currency, isStale }: MarketHeatmapProps)
               height: category.height,
             }}
           >
-            <h3
+            {/* h2: in this view the categories sit directly under the page's h1. */}
+            <h2
               className="truncate px-2 text-xs font-medium text-muted"
               style={{ lineHeight: `${CATEGORY_LABEL_HEIGHT}px` }}
             >
               <span className="font-semibold text-fg">{category.id}</span> ·{" "}
               {CATEGORIES[category.id].name}
-            </h3>
+            </h2>
           </div>
         ))}
 
@@ -193,17 +198,7 @@ function HeatmapTooltip({
       </p>
       <p className="mt-1 flex items-baseline justify-between gap-2 tabular-nums">
         <span className="font-medium">{formatPrice(coin.price, currency)}</span>
-        <span
-          className={
-            change.direction === "up"
-              ? "text-up"
-              : change.direction === "down"
-                ? "text-down"
-                : "text-muted"
-          }
-        >
-          {change.text}
-        </span>
+        <span className={changeToneClass(change.direction)}>{change.text}</span>
       </p>
       <p className="mt-0.5 text-xs text-muted">
         Market cap {formatCompactCurrency(coin.marketCap, currency)}

@@ -4,6 +4,7 @@
  */
 import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import { SURFACE, contrastRatio } from "@/lib/color";
 import { buildFxUrl, buildMarketsUrl } from "@/server/coingecko/client";
 import { FX_REFRESH_INTERVAL_MS } from "@/server/config";
 import {
@@ -84,7 +85,8 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** Waits for any background refresh the last request started, rather than guessing at timing. */
+const settle = () => Promise.all([source.markets.settled(), source.fx.settled()]);
 const historyRequest = (id: string) =>
   getHistory(new Request(`http://localhost/api/coins/${id}/history`), {
     params: Promise.resolve({ id }),
@@ -107,11 +109,10 @@ describe("GET /api/markets", () => {
   it("joins market data with application metadata", async () => {
     const body = await json<MarketsResponse>(await getMarkets());
     const btc = body.coins.find((c) => c.id === "bitcoin")!;
-    expect(btc).toMatchObject({
-      category: "A",
-      hasCuratedMetadata: true,
-      accent: { brand: "#F7931A" },
-    });
+    expect(btc.category).toBe("A");
+    // Bitcoin's orange (#F7931A) is too light on white, so it arrives darkened to 3:1.
+    expect(btc.accent).not.toBe("#F7931A");
+    expect(contrastRatio(btc.accent, SURFACE)).toBeGreaterThanOrEqual(3);
     expect(new Set(body.coins.map((c) => c.category))).toEqual(new Set(["A", "B", "C"]));
   });
 
@@ -158,7 +159,6 @@ describe("GET /api/markets", () => {
 
     await getMarkets(); // triggers the failing background refresh
     await settle();
-    await settle();
 
     const response = await getMarkets();
     const body = await json<MarketsResponse>(response);
@@ -181,7 +181,6 @@ describe("GET /api/markets", () => {
     upstream.respond = () => HttpResponse.json([]);
     await getMarkets();
     await settle();
-    await settle();
 
     const body = await json<MarketsResponse>(await getMarkets());
     expect(body.coins).toHaveLength(50);
@@ -197,7 +196,6 @@ describe("GET /api/markets", () => {
         fixture.map((coin) => ({ ...coin, current_price: String(coin.current_price) })),
       );
     await getMarkets();
-    await settle();
     await settle();
 
     const body = await json<MarketsResponse>(await getMarkets());

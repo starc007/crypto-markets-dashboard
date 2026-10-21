@@ -1,3 +1,4 @@
+import { seriesChangePct } from "@/lib/chart";
 import { formatPercentChange } from "@/lib/format";
 
 const WIDTH = 96;
@@ -14,15 +15,14 @@ const STROKE = { up: "var(--up)", down: "var(--down)", flat: "var(--text-muted)"
 export function Sparkline({ values }: { values: readonly number[] | null }) {
   if (!values || values.length < 2) {
     return (
-      <span className="text-muted" aria-label="No 7-day trend available">
-        —
+      <span className="text-muted">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">No 7-day trend available</span>
       </span>
     );
   }
 
-  const first = values[0]!;
-  const last = values[values.length - 1]!;
-  const change = formatPercentChange(first > 0 ? (last / first - 1) * 100 : null);
+  const change = formatPercentChange(seriesChangePct(values));
   const min = Math.min(...values);
   const range = Math.max(...values) - min || 1;
   const points = values

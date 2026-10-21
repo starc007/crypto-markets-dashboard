@@ -1,4 +1,3 @@
-import type { AccentColor } from "@/lib/color";
 import type { CategoryId } from "./categories";
 import type { FxSnapshot } from "./currency";
 
@@ -28,9 +27,8 @@ export interface MarketQuote {
 /** A quote joined with application-owned metadata. */
 export interface MarketCoin extends MarketQuote {
   category: CategoryId;
-  accent: AccentColor;
-  /** False when the asset is not in our curated metadata and fallbacks were applied. */
-  hasCuratedMetadata: boolean;
+  /** Brand colour for rings and chart lines, already adjusted to contrast with our surface. */
+  accent: string;
   /**
    * A light 7-day USD price series for row sparklines (every ~4 hours). The
    * full hourly series is only sent with asset details.

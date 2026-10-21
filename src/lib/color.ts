@@ -19,8 +19,8 @@ export function parseHex(hex: string): Rgb {
   return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
 }
 
-function toHex([r, g, b]: Rgb): string {
-  return `#${[r, g, b].map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+export function toHex(rgb: readonly number[]): string {
+  return `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
 function channelLuminance(channel: number): number {
@@ -67,18 +67,12 @@ export function ensureContrast(
   return toHex(target);
 }
 
-export interface AccentColor {
-  /** The curated brand colour, unmodified. */
-  brand: string;
-  /** The brand colour adjusted, if needed, to stay visible on our surface. */
-  display: string;
-}
-
-export function deriveAccent(brand: string): AccentColor {
-  return { brand: toHex(parseHex(brand)), display: ensureContrast(brand, SURFACE) };
+/** The brand colour, adjusted only if needed to stay visible on our surface. */
+export function deriveAccent(brand: string): string {
+  return ensureContrast(brand, SURFACE);
 }
 
 /** Sets `--accent`, which Tailwind exposes as the `accent` colour (e.g. `ring-accent`). */
-export function accentVars(accent: AccentColor): Record<"--accent", string> {
-  return { "--accent": accent.display };
+export function accentVars(accent: string): Record<"--accent", string> {
+  return { "--accent": accent };
 }

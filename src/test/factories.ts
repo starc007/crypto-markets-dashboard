@@ -19,7 +19,6 @@ export function makeCoin(overrides: Partial<MarketCoin> & Pick<MarketCoin, "id">
     lastUpdated: "2026-01-01T12:00:00.000Z",
     category: "A",
     accent: deriveAccent("#3366FF"),
-    hasCuratedMetadata: true,
     trend7d: null,
     ...overrides,
   };

@@ -1,8 +1,12 @@
 "use client";
 
 import { motion } from "motion/react";
-import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useId, useMemo } from "react";
+import { useChartScrubber } from "@/hooks/use-chart-scrubber";
+import { hourlyPointTime, pointTimeFormat } from "@/lib/chart";
 import { formatPercentChange } from "@/lib/format";
+import { ChartDot, Crosshair, RevealClip } from "../charts/chart-parts";
+import { changeToneClass } from "../ui/change-tone";
 
 export interface CompareSeries {
   id: string;
@@ -16,18 +20,6 @@ export interface CompareSeries {
 const WIDTH = 720;
 const HEIGHT = 300;
 const PAD_Y = 16;
-const HOUR_MS = 60 * 60_000;
-const FOLLOW = { type: "spring", stiffness: 700, damping: 45, mass: 0.6 } as const;
-
-const timeFormat = new Intl.DateTimeFormat("en-US", {
-  weekday: "short",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-function changeClass(direction: string | null): string {
-  return direction === "up" ? "text-up" : direction === "down" ? "text-down" : "text-muted";
-}
 
 /**
  * Overlaid performance lines, each in the asset's brand colour, all starting
@@ -43,8 +35,8 @@ export function CompareChart({
 }) {
   const clipId = useId();
   const readoutId = useId();
-  const [active, setActive] = useState<number | null>(null);
   const points = series[0]?.values.length ?? 0;
+  const { active, fromKeyboard, handlers } = useChartScrubber(points);
 
   const geometry = useMemo(() => {
     const all = series.flatMap((s) => s.values);
@@ -63,31 +55,10 @@ export function CompareChart({
 
   if (points < 2) return null;
 
-  const pointTime = (i: number) => endTime - (points - 1 - i) * HOUR_MS;
   const index = active ?? points - 1;
   const readings = series
     .map((s) => ({ s, value: s.values[index]! }))
     .sort((a, b) => b.value - a.value);
-
-  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    setActive(Math.round(ratio * (points - 1)));
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const moves: Record<string, (i: number) => number> = {
-      ArrowLeft: (i) => Math.max(0, i - 1),
-      ArrowRight: (i) => Math.min(points - 1, i + 1),
-      Home: () => 0,
-      End: () => points - 1,
-    };
-    const move = moves[event.key];
-    if (!move) return;
-    event.preventDefault();
-    setActive((i) => move(i ?? points - 1));
-  }
-
   const summary = series
     .map((s) => `${s.name} ${formatPercentChange(s.values.at(-1)!).label}`)
     .join(", ");
@@ -100,10 +71,7 @@ export function CompareChart({
         aria-label={`Performance over the period: ${summary}.`}
         aria-describedby={readoutId}
         tabIndex={0}
-        onPointerMove={onPointerMove}
-        onPointerLeave={() => setActive(null)}
-        onKeyDown={onKeyDown}
-        onBlur={() => setActive(null)}
+        {...handlers}
         className="relative touch-pan-y rounded-lg"
       >
         <svg
@@ -113,16 +81,7 @@ export function CompareChart({
           aria-hidden="true"
         >
           <defs>
-            <clipPath id={clipId}>
-              <motion.rect
-                x={0}
-                y={0}
-                height={HEIGHT}
-                initial={{ width: 0 }}
-                animate={{ width: WIDTH }}
-                transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </clipPath>
+            <RevealClip id={clipId} width={WIDTH} height={HEIGHT} />
           </defs>
           <line
             x1={0}
@@ -150,33 +109,16 @@ export function CompareChart({
               />
             ))}
           </g>
-          {active !== null && (
-            <motion.line
-              initial={false}
-              animate={{ x1: geometry.x(active), x2: geometry.x(active) }}
-              transition={FOLLOW}
-              y1={0}
-              y2={HEIGHT}
-              stroke="var(--text-muted)"
-              strokeDasharray="3 3"
-              vectorEffect="non-scaling-stroke"
-            />
-          )}
+          {active !== null && <Crosshair x={geometry.x(active)} height={HEIGHT} />}
         </svg>
 
         {active !== null &&
           series.map((s) => (
-            <motion.span
+            <ChartDot
               key={s.id}
-              aria-hidden="true"
-              className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface"
-              style={{ background: s.color }}
-              initial={false}
-              animate={{
-                left: `${(geometry.x(active) / WIDTH) * 100}%`,
-                top: `${(geometry.y(s.values[active]!) / HEIGHT) * 100}%`,
-              }}
-              transition={FOLLOW}
+              color={s.color}
+              left={`${(geometry.x(active) / WIDTH) * 100}%`}
+              top={`${(geometry.y(s.values[active]!) / HEIGHT) * 100}%`}
             />
           ))}
 
@@ -188,9 +130,15 @@ export function CompareChart({
         </span>
       </div>
 
-      <figcaption id={readoutId} aria-live="polite" className="flex flex-col gap-1.5">
+      <figcaption
+        id={readoutId}
+        aria-live={fromKeyboard ? "polite" : "off"}
+        className="flex flex-col gap-1.5"
+      >
         <p className="text-xs text-muted">
-          {active === null ? "Change over the period" : `≈ ${timeFormat.format(pointTime(active))}`}
+          {active === null
+            ? "Change over the period"
+            : `≈ ${pointTimeFormat.format(hourlyPointTime(active, points, endTime))}`}
         </p>
         <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
           {readings.map(({ s, value }) => {
@@ -203,7 +151,7 @@ export function CompareChart({
                   style={{ background: s.color }}
                 />
                 <span className="font-medium">{s.symbol}</span>
-                <span className={`tabular-nums ${changeClass(change.direction)}`}>
+                <span className={`tabular-nums ${changeToneClass(change.direction)}`}>
                   {change.text}
                 </span>
               </li>

@@ -33,7 +33,3 @@ export const CATEGORIES: Record<CategoryId, Category> = {
 
 /** Where an asset lands when it has no curated metadata yet. */
 export const FALLBACK_CATEGORY: CategoryId = "C";
-
-export function isCategoryId(value: unknown): value is CategoryId {
-  return typeof value === "string" && (CATEGORY_IDS as readonly string[]).includes(value);
-}

@@ -3,8 +3,6 @@ export const CURRENCIES = ["USD", "EUR", "GBP"] as const;
 export type Currency = (typeof CURRENCIES)[number];
 export type ForeignCurrency = Exclude<Currency, "USD">;
 
-export const FOREIGN_CURRENCIES: readonly ForeignCurrency[] = ["EUR", "GBP"];
-
 export function isCurrency(value: unknown): value is Currency {
   return typeof value === "string" && (CURRENCIES as readonly string[]).includes(value);
 }

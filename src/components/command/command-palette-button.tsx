@@ -1,9 +1,22 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import { SearchIcon } from "../ui/icons";
 import { openCommandPalette } from "./open-command-palette";
 
+const noop = () => () => {};
+
+/** Apple platforms show ⌘K, everything else Ctrl K. Unknown until mounted, so nothing renders on the server. */
+function useShortcutLabel(): string | null {
+  return useSyncExternalStore(
+    noop,
+    () => (/Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K"),
+    () => null,
+  );
+}
+
 export function CommandPaletteButton() {
+  const shortcut = useShortcutLabel();
   return (
     <button
       type="button"
@@ -13,9 +26,11 @@ export function CommandPaletteButton() {
     >
       <SearchIcon className="size-4" />
       <span>Jump to asset</span>
-      <kbd className="rounded-md border border-border bg-surface-muted px-1.5 py-0.5 font-sans text-xs">
-        ⌘K
-      </kbd>
+      {shortcut && (
+        <kbd className="rounded-md border border-border bg-surface-muted px-1.5 py-0.5 font-sans text-xs">
+          {shortcut}
+        </kbd>
+      )}
     </button>
   );
 }

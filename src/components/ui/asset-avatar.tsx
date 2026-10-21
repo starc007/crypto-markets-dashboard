@@ -1,11 +1,12 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
-import { accentVars, type AccentColor } from "@/lib/color";
+import { accentVars } from "@/lib/color";
 
 interface AssetAvatarProps {
   symbol: string;
   imageUrl: string | null;
-  accent: AccentColor;
+  /** Display colour for the ring (see `MarketCoin.accent`). */
+  accent: string;
   size?: number;
 }
 

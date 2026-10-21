@@ -1,5 +1,5 @@
 import "server-only";
-import { STALE_AFTER_INTERVALS } from "@/lib/freshness";
+import { STALE_AFTER_INTERVALS } from "@/shared/freshness-policy";
 import type { FxSnapshot } from "@/shared/currency";
 import type {
   CoinHistoryResponse,
@@ -136,11 +136,9 @@ async function readFx(source: MarketsSource): Promise<FxSnapshot | null> {
   }
 }
 
-async function readSnapshot(): Promise<Snapshot> {
-  const source = getMarketsSource();
+async function readMarkets(source: MarketsSource) {
   try {
-    const [markets, fx] = await Promise.all([source.markets.get(), readFx(source)]);
-    return { markets, fx, refreshIntervalMs: source.refreshIntervalMs };
+    return await source.markets.get();
   } catch (error) {
     if (error instanceof CacheEmptyError) {
       const { failure } = error as CacheEmptyError<UpstreamError>;
@@ -148,6 +146,12 @@ async function readSnapshot(): Promise<Snapshot> {
     }
     throw error;
   }
+}
+
+async function readSnapshot(): Promise<Snapshot> {
+  const source = getMarketsSource();
+  const [markets, fx] = await Promise.all([readMarkets(source), readFx(source)]);
+  return { markets, fx, refreshIntervalMs: source.refreshIntervalMs };
 }
 
 function toMeta(snapshot: Snapshot, now: number): SnapshotMeta {
@@ -178,11 +182,18 @@ export async function getMarkets(now = Date.now()): Promise<MarketsResponse> {
 
 /** Returns null for ids outside the current top 50: we only serve what we already hold. */
 export async function getCoinHistory(id: string): Promise<CoinHistoryResponse | null> {
-  const snapshot = await readSnapshot();
-  if (!snapshot.markets.value.quotes.some((q) => q.id === id)) return null;
+  // History needs no exchange rates, so it never waits on them.
+  const markets = await readMarkets(getMarketsSource());
+  if (!markets.value.quotes.some((q) => q.id === id)) return null;
   return {
     id,
-    fetchedAt: new Date(snapshot.markets.fetchedAt).toISOString(),
-    prices: snapshot.markets.value.sparklines.get(id) ?? null,
+    fetchedAt: new Date(markets.fetchedAt).toISOString(),
+    prices: markets.value.sparklines.get(id) ?? null,
   };
+}
+
+/** The asset's display name in the current snapshot, or null if it isn't in the top 50. */
+export async function getCoinName(id: string): Promise<string | null> {
+  const markets = await readMarkets(getMarketsSource());
+  return markets.value.quotes.find((q) => q.id === id)?.name ?? null;
 }

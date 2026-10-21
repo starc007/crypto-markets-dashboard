@@ -33,9 +33,8 @@ describe("ensureContrast", () => {
 
 describe("deriveAccent", () => {
   it("keeps the brand colour and derives a readable display colour", () => {
-    const accent = deriveAccent("#97fce4");
-    expect(accent.brand).toBe("#97FCE4");
-    expect(contrastRatio(accent.display, SURFACE)).toBeGreaterThanOrEqual(3);
+    expect(deriveAccent("#627EEA")).toBe("#627EEA");
+    expect(contrastRatio(deriveAccent("#97fce4"), SURFACE)).toBeGreaterThanOrEqual(3);
   });
 });
 

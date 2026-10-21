@@ -1,5 +1,5 @@
 import "server-only";
-import { deriveAccent, type AccentColor } from "@/lib/color";
+import { deriveAccent } from "@/lib/color";
 import { downsample } from "@/lib/series";
 import { getAssetMetadata } from "@/shared/asset-metadata";
 import { FALLBACK_CATEGORY } from "@/shared/categories";
@@ -15,10 +15,10 @@ export const FALLBACK_COLOR = "#8B93A1";
 const TREND_POINTS = 42;
 const TREND_PRECISION = 5;
 
-const accentCache = new Map<string, AccentColor>();
+const accentCache = new Map<string, string>();
 const reportedUnknownIds = new Set<string>();
 
-function accentFor(color: string): AccentColor {
+function accentFor(color: string): string {
   let accent = accentCache.get(color);
   if (!accent) {
     accent = deriveAccent(color);
@@ -42,7 +42,6 @@ export function enrichQuote(quote: MarketQuote, sparkline: readonly number[] | n
     ...quote,
     category: metadata?.category ?? FALLBACK_CATEGORY,
     accent: accentFor(metadata?.color ?? FALLBACK_COLOR),
-    hasCuratedMetadata: metadata !== undefined,
     trend7d: sparkline
       ? downsample(sparkline, TREND_POINTS).map((p) => Number(p.toPrecision(TREND_PRECISION)))
       : null,

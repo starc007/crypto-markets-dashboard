@@ -123,12 +123,15 @@ afterEach(() => {
 describe("MarketDashboard", () => {
   it("groups assets into the three categories", () => {
     renderDashboard();
+    // Each category is a landmark named by its heading, in A, B, C order.
     const sections = screen.getAllByRole("region");
-    expect(sections.map((s) => within(s).getByRole("heading").textContent)).toEqual([
-      "ACategory A: Base-layer networks",
-      "BCategory B: Stablecoins & tokenised assets",
-      "CCategory C: Apps & ecosystem tokens",
+    expect(sections.map((s) => s.getAttribute("aria-labelledby"))).toEqual([
+      "category-A",
+      "category-B",
+      "category-C",
     ]);
+    expect(screen.getByRole("region", { name: /Base-layer networks/ })).toBe(sections[0]);
+    expect(screen.getByRole("region", { name: /Stablecoins/ })).toBe(sections[1]);
     expect(within(sections[0]!).getAllByRole("row")).toHaveLength(3); // header + 2 assets
   });
 

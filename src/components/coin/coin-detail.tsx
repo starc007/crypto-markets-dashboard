@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, type CSSProperties } from "react";
 import { useCurrencyPreference, useDisplayCurrency } from "@/hooks/use-currency";
+import { useFreshness, type ConnectionState } from "@/hooks/use-freshness";
 import { useCoinHistory, useMarkets } from "@/hooks/use-market-data";
 import { useNow } from "@/hooks/use-now";
 import { useWatchlist } from "@/hooks/use-watchlist";
@@ -21,12 +22,7 @@ import { CATEGORIES } from "@/shared/categories";
 import type { Currency } from "@/shared/currency";
 import type { CoinHistoryResponse, MarketCoin, MarketsResponse } from "@/shared/market";
 import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
-import {
-  FreshnessBanner,
-  FreshnessIndicator,
-  useFreshness,
-  type ConnectionState,
-} from "../freshness/freshness";
+import { FreshnessBanner, FreshnessIndicator } from "../freshness/freshness";
 import { AssetAvatar } from "../ui/asset-avatar";
 import { FlashOnChange } from "../ui/flash-on-change";
 import { ErrorState } from "../ui/error-state";
@@ -228,7 +224,8 @@ function CoinDetailView({
           <PriceChart
             prices={sparkline7d}
             currency={currency}
-            endTime={Date.parse(coin.lastUpdated ?? meta.fetchedAt)}
+            // Same convention as compare: the series ends at the snapshot time.
+            endTime={Date.parse(meta.fetchedAt)}
             assetName={coin.name}
           />
         ) : historyLoading ? (

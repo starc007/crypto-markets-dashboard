@@ -65,6 +65,8 @@ export function historyQuery(id: string, fetchedAt: string | undefined) {
     enabled: fetchedAt !== undefined,
     staleTime: Infinity,
     retry: 1,
+    // Keep showing the previous chart while the next snapshot's history loads.
+    placeholderData: keepPreviousData,
   };
 }
 
@@ -77,7 +79,5 @@ export function useCoinHistory(
   return useQuery({
     ...historyQuery(id, fetchedAt),
     initialData: initial?.fetchedAt === fetchedAt ? initial : undefined,
-    // Keep showing the previous chart while the next snapshot's history loads.
-    placeholderData: keepPreviousData,
   });
 }

@@ -100,14 +100,14 @@ const fxSchema = z.object({
   }),
 });
 
+export type FxRates = Omit<FxSnapshot, "fetchedAt">;
+
 /**
  * Derives USD→EUR/GBP rates from Bitcoin's price in each currency, which is
  * how CoinGecko itself converts between currencies. Comparing Bitcoin's 24h
  * change in each currency gives the exchange rate's own 24h change:
  *   rateChange = (1 + btcChangeInEur) / (1 + btcChangeInUsd) − 1
  */
-export type FxRates = Omit<FxSnapshot, "fetchedAt">;
-
 export function parseFxRates(payload: unknown): FxRates | null {
   const result = fxSchema.safeParse(payload);
   if (!result.success) return null;

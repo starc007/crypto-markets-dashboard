@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useCurrencyPreference, useDisplayCurrency } from "@/hooks/use-currency";
+import { useFreshness, type ConnectionState } from "@/hooks/use-freshness";
 import { useMarkets } from "@/hooks/use-market-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import {
@@ -20,12 +21,7 @@ import { CATEGORIES, CATEGORY_IDS } from "@/shared/categories";
 import type { Currency } from "@/shared/currency";
 import type { MarketsResponse } from "@/shared/market";
 import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
-import {
-  FreshnessBanner,
-  FreshnessIndicator,
-  useFreshness,
-  type ConnectionState,
-} from "../freshness/freshness";
+import { FreshnessBanner, FreshnessIndicator } from "../freshness/freshness";
 import { ErrorState } from "../ui/error-state";
 import { CategorySection } from "./category-section";
 import { DashboardSkeleton } from "./dashboard-skeleton";

@@ -1,6 +1,6 @@
 import { hierarchy, treemap, treemapSquarify } from "d3-hierarchy";
 import { CATEGORY_IDS, type CategoryId } from "@/shared/categories";
-import { contrastRatio } from "./color";
+import { SURFACE, contrastRatio, toHex } from "./color";
 import type { DisplayCoin } from "./currency-conversion";
 import { formatPercentChange } from "./format";
 
@@ -80,12 +80,11 @@ export function layoutHeatmap(
 export const HEAT_SATURATION_PCT = 8;
 
 const NEUTRAL: [number, number, number] = [233, 236, 241];
+/** `--text` and a slightly softer grey from globals.css; tiles pick whichever reads at 4.5:1. */
+const TEXT_DARK = "#101828";
+const TEXT_ON_NEUTRAL = "#344054";
 const UP: [number, number, number] = [3, 152, 85];
 const DOWN: [number, number, number] = [217, 45, 32];
-
-function toHex(rgb: readonly number[]): string {
-  return `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, "0")).join("")}`;
-}
 
 export interface HeatColor {
   background: string;
@@ -100,11 +99,11 @@ export interface HeatColor {
 export function heatColor(changePct: number | null): HeatColor {
   const { direction } = formatPercentChange(changePct);
   if (direction === null || direction === "flat" || changePct === null) {
-    return { background: toHex(NEUTRAL), text: "#344054" };
+    return { background: toHex(NEUTRAL), text: TEXT_ON_NEUTRAL };
   }
   const target = direction === "up" ? UP : DOWN;
   const t = 0.18 + 0.82 * Math.min(1, Math.abs(changePct) / HEAT_SATURATION_PCT) ** 0.7;
   const background = toHex(NEUTRAL.map((c, i) => c + (target[i]! - c) * t));
-  const text = contrastRatio(background, "#FFFFFF") >= 4.5 ? "#FFFFFF" : "#101828";
+  const text = contrastRatio(background, SURFACE) >= 4.5 ? SURFACE : TEXT_DARK;
   return { background, text };
 }

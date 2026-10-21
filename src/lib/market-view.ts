@@ -90,8 +90,6 @@ export interface CategorySummary {
    * weighted, is not the same number. Assumes supply was constant over 24h.
    */
   change24hPct: number | null;
-  /** Assets left out of the totals because a value was missing. */
-  excludedCount: number;
 }
 
 export function summarizeCategory(coins: readonly DisplayCoin[]): CategorySummary {
@@ -118,6 +116,5 @@ export function summarizeCategory(coins: readonly DisplayCoin[]): CategorySummar
     count: coins.length,
     totalMarketCap: capCount > 0 ? capSum : null,
     change24hPct: included > 0 && totalBefore > 0 ? (totalNow / totalBefore - 1) * 100 : null,
-    excludedCount: coins.length - included,
   };
 }

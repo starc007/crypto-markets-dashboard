@@ -62,10 +62,17 @@ Browser ──────▶ /api/coins/:id/history┘   rates   ──≤1 cal
 src/
   app/                 Pages and route handlers (thin: they delegate to src/server)
   server/              Server only: CoinGecko client, schema validation, SWR caches, metadata join
-  shared/              Wire types, categories, curated asset metadata
-  lib/                 Pure logic: formatting, currency conversion, freshness, sorting, colour contrast
-  hooks/               Polling queries, watchlist and currency preferences, shared clock
-  components/          UI, split into dashboard, coin detail, currency, freshness and primitives (ui/)
+  shared/              Used by server and client: wire types, categories, asset metadata, freshness policy
+  lib/                 Pure logic: formatting, currency conversion, freshness, sorting, search,
+                       heatmap layout, chart maths, colour contrast
+  hooks/               Polling queries, freshness, preferences (watchlist, currency), shared clock
+  components/
+    dashboard/         Table, heatmap, toolbar, category sections
+    coin/  compare/    Asset page and compare page, with their charts
+    charts/            Parts shared by the charts (reveal, crosshair, marker)
+    command/           ⌘K command palette
+    currency/  freshness/  ui/   Currency switcher, freshness indicator and banner, primitives
+scripts/               check-metadata.ts (lists top-50 assets missing curated metadata)
 ```
 
 ## Known limitations

@@ -64,15 +64,21 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const { data, isPending, isError } = useMarketsSnapshot();
   const { currency: requested, setCurrency } = useCurrencyPreference("USD");
   const display = useDisplayCurrency(requested, data?.fx ?? null);
   const { currency } = display.converter;
 
-  // Return focus to wherever the user was when the palette closes.
+  /*
+   * A native modal dialog makes the rest of the page inert, so Tab can't
+   * leave the palette and assistive tech treats it as modal. Focus returns to
+   * wherever the user was when it closes.
+   */
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.showModal();
     return () => previous?.focus?.();
   }, []);
 
@@ -149,19 +155,23 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
   const firstCommand = items.findIndex((item) => item.kind === "command");
 
   return (
-    <motion.div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-fg/20 px-4 pt-[12vh] backdrop-blur-[2px]"
+    <motion.dialog
+      ref={dialogRef}
+      aria-label="Command palette"
+      className="fixed inset-0 m-0 flex h-dvh max-h-none w-full max-w-none items-start justify-center bg-fg/20 px-4 pt-[12vh] backdrop-blur-[2px] backdrop:bg-transparent"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
+      // Escape: close through React so the exit animation plays.
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <motion.div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
         className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
         initial={{ opacity: 0, scale: 0.97, y: -8 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -269,6 +279,6 @@ function PaletteDialog({ onClose }: { onClose: () => void }) {
           <span>Esc to close</span>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.dialog>
   );
 }
