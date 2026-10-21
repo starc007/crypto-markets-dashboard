@@ -1,4 +1,6 @@
 import { deriveAccent } from "@/lib/color";
+import { createConverter, toDisplayCoin, type DisplayCoin } from "@/lib/currency-conversion";
+import type { FxSnapshot } from "@/shared/currency";
 import type { MarketCoin, MarketsResponse, SnapshotMeta } from "@/shared/market";
 
 export function makeCoin(overrides: Partial<MarketCoin> & Pick<MarketCoin, "id">): MarketCoin {
@@ -32,9 +34,28 @@ export function makeMeta(overrides: Partial<SnapshotMeta> = {}): SnapshotMeta {
   };
 }
 
+export function makeFx(overrides: Partial<FxSnapshot> = {}): FxSnapshot {
+  return {
+    rates: {
+      EUR: { perUsd: 0.9, rateChange24hPct: 0.5 },
+      GBP: { perUsd: 0.8, rateChange24hPct: -0.25 },
+    },
+    fetchedAt: "2026-01-01T11:30:00.000Z",
+    ...overrides,
+  };
+}
+
 export function makeMarketsResponse(
   coins: MarketCoin[],
   meta?: Partial<SnapshotMeta>,
 ): MarketsResponse {
-  return { coins, meta: makeMeta(meta) };
+  return { coins, fx: makeFx(), meta: makeMeta(meta) };
+}
+
+/** A USD display coin, for logic that runs after currency conversion. */
+export function makeDisplayCoin(
+  overrides: Partial<DisplayCoin> & Pick<DisplayCoin, "id">,
+): DisplayCoin {
+  const base = toDisplayCoin(makeCoin({ id: overrides.id }), createConverter("USD", null)!);
+  return { ...base, ...overrides };
 }

@@ -4,6 +4,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { WATCHLIST_STORAGE_KEY } from "@/hooks/use-watchlist";
+import type { Currency } from "@/shared/currency";
 import type { MarketsResponse } from "@/shared/market";
 import { makeCoin, makeMarketsResponse } from "@/test/factories";
 import { MarketDashboard } from "./market-dashboard";
@@ -76,11 +77,14 @@ const coins = [
   }),
 ];
 
-function renderDashboard(initialData: MarketsResponse | null = makeMarketsResponse(coins)) {
+function renderDashboard(
+  initialData: MarketsResponse | null = makeMarketsResponse(coins),
+  initialCurrency: Currency = "USD",
+) {
   const client = new QueryClient();
   return render(
     <QueryClientProvider client={client}>
-      <MarketDashboard initialData={initialData} />
+      <MarketDashboard initialData={initialData} initialCurrency={initialCurrency} />
     </QueryClientProvider>,
   );
 }
@@ -103,6 +107,7 @@ beforeEach(() => {
     vi.fn(() => new Promise<Response>(() => {})),
   );
   window.localStorage.clear();
+  document.cookie = "currency=; max-age=0; path=/";
 });
 
 afterEach(() => {
@@ -244,5 +249,35 @@ describe("MarketDashboard", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/temporarily unavailable/);
     expect(screen.getByRole("alert")).toHaveTextContent("retry in about 2 min");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("converts every value when the currency changes and remembers the choice", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderDashboard();
+
+    await user.click(screen.getByRole("radio", { name: /EUR/ }));
+
+    // Factory rate: 0.9 EUR per USD, and the dollar rose 0.5% against the euro.
+    const bitcoin = rowFor("Bitcoin");
+    expect(within(bitcoin).getByText("€74,988.90")).toBeInTheDocument();
+    // (1.022 × 1.005 − 1) = +2.711%: the 24h change is restated, not reused.
+    expect(within(bitcoin).getAllByText("+2.71%")[0]).toBeInTheDocument();
+    expect(screen.getByText(/1 USD = €0\.9000/)).toBeInTheDocument();
+    expect(document.cookie).toContain("currency=EUR");
+  });
+
+  it("renders the saved currency on first paint", () => {
+    renderDashboard(makeMarketsResponse(coins), "GBP");
+    expect(screen.getByRole("radio", { name: /GBP/ })).toBeChecked();
+    expect(within(rowFor("Bitcoin")).getByText("£66,656.80")).toBeInTheDocument();
+  });
+
+  it("falls back to USD, and says so, when rates are unavailable", () => {
+    const response = { ...makeMarketsResponse(coins), fx: null };
+    renderDashboard(response, "EUR");
+
+    expect(within(rowFor("Bitcoin")).getByText("$83,321.00")).toBeInTheDocument();
+    expect(screen.getByText(/Euro rates are unavailable/)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /EUR/ })).toBeDisabled();
   });
 });

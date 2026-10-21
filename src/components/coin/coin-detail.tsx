@@ -1,23 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
+import { useCurrencyPreference, useDisplayCurrency } from "@/hooks/use-currency";
 import { useCoinDetail } from "@/hooks/use-market-data";
 import { useNow } from "@/hooks/use-now";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { ApiError } from "@/lib/api-client";
 import { accentVars } from "@/lib/color";
+import { toDisplayCoin } from "@/lib/currency-conversion";
 import {
+  formatCompactCurrency,
   formatCompactNumber,
   formatDuration,
+  formatFullCurrency,
+  formatPrice,
   formatRelativeAge,
-  formatUsdCompact,
-  formatUsdFull,
-  formatUsdPrice,
 } from "@/lib/format";
 import { quoteLagMs } from "@/lib/freshness";
 import { CATEGORIES } from "@/shared/categories";
+import type { Currency } from "@/shared/currency";
 import type { CoinDetailResponse } from "@/shared/market";
+import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
 import { FreshnessBanner, FreshnessIndicator, useFreshness } from "../freshness/freshness";
 import { AssetAvatar } from "../ui/asset-avatar";
 import { ErrorState } from "../ui/error-state";
@@ -41,9 +45,11 @@ function BackLink() {
 export function CoinDetail({
   id,
   initialData,
+  initialCurrency,
 }: {
   id: string;
   initialData: CoinDetailResponse | null;
+  initialCurrency: Currency;
 }) {
   const { data, error, isError, refetch, isRefetching } = useCoinDetail(id, initialData);
   // The asset can drop out of the top 50 while the page is open.
@@ -61,7 +67,11 @@ export function CoinDetail({
           <p className="mt-1 text-sm text-muted">We only track the current top 50 by market cap.</p>
         </div>
       ) : data ? (
-        <CoinDetailView data={data} clientError={isError ? error : null} />
+        <CoinDetailView
+          data={data}
+          initialCurrency={initialCurrency}
+          clientError={isError ? error : null}
+        />
       ) : isError ? (
         <ErrorState error={error} onRetry={() => refetch()} retrying={isRefetching} />
       ) : (
@@ -73,13 +83,25 @@ export function CoinDetail({
 
 function CoinDetailView({
   data,
+  initialCurrency,
   clientError,
 }: {
   data: CoinDetailResponse & { receivedAt: number };
+  initialCurrency: Currency;
   clientError: Error | null;
 }) {
-  const { coin, sparkline7d, meta } = data;
+  const { meta } = data;
   const freshness = useFreshness(meta, data.receivedAt, clientError);
+  const { currency: requestedCurrency, setCurrency } = useCurrencyPreference(initialCurrency);
+  const display = useDisplayCurrency(requestedCurrency, data.fx);
+  const { converter } = display;
+  const { currency } = converter;
+  const coin = useMemo(() => toDisplayCoin(data.coin, converter), [data.coin, converter]);
+  // History is restated at today's rate; the FX move over 7 days is not modelled.
+  const sparkline7d = useMemo(
+    () => data.sparkline7d?.map((usd) => converter.amount(usd)!) ?? null,
+    [data.sparkline7d, converter],
+  );
   const { watchlist, toggle } = useWatchlist();
   const now = useNow();
   const lag = quoteLagMs(coin.lastUpdated, meta.fetchedAt);
@@ -88,16 +110,16 @@ function CoinDetailView({
   const stats = [
     {
       label: "Market cap",
-      value: formatUsdCompact(coin.marketCapUsd),
-      full: formatUsdFull(coin.marketCapUsd),
+      value: formatCompactCurrency(coin.marketCap, currency),
+      full: formatFullCurrency(coin.marketCap, currency),
     },
     {
       label: "Volume (24h)",
-      value: formatUsdCompact(coin.volume24hUsd),
-      full: formatUsdFull(coin.volume24hUsd),
+      value: formatCompactCurrency(coin.volume24h, currency),
+      full: formatFullCurrency(coin.volume24h, currency),
     },
-    { label: "24h high", value: formatUsdPrice(coin.high24hUsd) },
-    { label: "24h low", value: formatUsdPrice(coin.low24hUsd) },
+    { label: "24h high", value: formatPrice(coin.high24h, currency) },
+    { label: "24h low", value: formatPrice(coin.low24h, currency) },
     {
       label: "Circulating supply",
       value:
@@ -140,12 +162,15 @@ function CoinDetailView({
             </p>
           </div>
         </div>
-        <WatchToggle
-          assetName={coin.name}
-          watched={watchlist.has(coin.id)}
-          onToggle={() => toggle(coin.id)}
-          className="border border-border"
-        />
+        <div className="flex items-center gap-2">
+          <CurrencySwitcher value={currency} onChange={setCurrency} fx={data.fx} />
+          <WatchToggle
+            assetName={coin.name}
+            watched={watchlist.has(coin.id)}
+            onToggle={() => toggle(coin.id)}
+            className="size-9 border border-border"
+          />
+        </div>
       </header>
 
       <div className="flex flex-col gap-3">
@@ -154,13 +179,14 @@ function CoinDetailView({
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <p
             className={`text-4xl font-semibold tracking-tight tabular-nums ${isStale ? "text-muted" : ""}`}
-            title={formatUsdFull(coin.priceUsd)}
+            title={formatFullCurrency(coin.price, currency)}
           >
-            {formatUsdPrice(coin.priceUsd)}
+            {formatPrice(coin.price, currency)}
           </p>
           <PriceChange value={coin.change24hPct} className="text-lg" />
           <span className="text-sm text-muted">24h</span>
         </div>
+        <ConversionNote display={display} fx={data.fx} />
         {lag !== null && (
           <p className="text-sm text-warn">
             CoinGecko last updated this price {formatDuration(lag)} before our latest snapshot, so
@@ -173,6 +199,7 @@ function CoinDetailView({
         {sparkline7d ? (
           <PriceChart
             prices={sparkline7d}
+            currency={currency}
             endTime={Date.parse(coin.lastUpdated ?? meta.fetchedAt)}
             assetName={coin.name}
           />

@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { formatPercentChange, formatUsdPrice } from "@/lib/format";
+import { formatPercentChange, formatPrice } from "@/lib/format";
+import type { Currency } from "@/shared/currency";
 
 const WIDTH = 640;
 const HEIGHT = 220;
@@ -10,6 +11,7 @@ const HOUR_MS = 60 * 60_000;
 
 interface PriceChartProps {
   prices: readonly number[];
+  currency: Currency;
   /** Timestamp of the last point; earlier points are assumed hourly. */
   endTime: number;
   assetName: string;
@@ -26,7 +28,8 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
  * users can focus the chart and step through points with the arrow keys.
  * Point times are approximate because CoinGecko's sparkline has no timestamps.
  */
-export function PriceChart({ prices, endTime, assetName }: PriceChartProps) {
+export function PriceChart({ prices, currency, endTime, assetName }: PriceChartProps) {
+  const money = (value: number) => formatPrice(value, currency);
   const gradientId = useId();
   const readoutId = useId();
   const [active, setActive] = useState<number | null>(null);
@@ -56,8 +59,8 @@ export function PriceChart({ prices, endTime, assetName }: PriceChartProps) {
   const pointTime = (i: number) => endTime - (prices.length - 1 - i) * HOUR_MS;
 
   const summary =
-    `${assetName} over 7 days: from ${formatUsdPrice(first)} to ${formatUsdPrice(last)}, ` +
-    `${change.label}. Low ${formatUsdPrice(geometry.min)}, high ${formatUsdPrice(geometry.max)}.`;
+    `${assetName} over 7 days: from ${money(first)} to ${money(last)}, ` +
+    `${change.label}. Low ${money(geometry.min)}, high ${money(geometry.max)}.`;
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -88,12 +91,12 @@ export function PriceChart({ prices, endTime, assetName }: PriceChartProps) {
         <span id={readoutId} aria-live="polite" className="text-muted tabular-nums">
           {activePrice !== null && active !== null ? (
             <>
-              <span className="font-medium text-fg">{formatUsdPrice(activePrice)}</span> · ≈{" "}
+              <span className="font-medium text-fg">{money(activePrice)}</span> · ≈{" "}
               {timeFormat.format(pointTime(active))}
             </>
           ) : (
             <>
-              Low {formatUsdPrice(geometry.min)} · High {formatUsdPrice(geometry.max)}
+              Low {money(geometry.min)} · High {money(geometry.max)}
             </>
           )}
         </span>

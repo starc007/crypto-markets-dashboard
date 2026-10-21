@@ -1,5 +1,5 @@
 import { CATEGORY_IDS, type CategoryId } from "@/shared/categories";
-import type { MarketCoin } from "@/shared/market";
+import type { DisplayCoin } from "./currency-conversion";
 
 export type SortKey = "marketCap" | "price" | "change24h" | "volume" | "name";
 export type SortDirection = "asc" | "desc";
@@ -20,14 +20,14 @@ export const INITIAL_DIRECTION: Record<SortKey, SortDirection> = {
   name: "asc",
 };
 
-const sortValue: Record<Exclude<SortKey, "name">, (coin: MarketCoin) => number | null> = {
-  marketCap: (c) => c.marketCapUsd,
-  price: (c) => c.priceUsd,
+const sortValue: Record<Exclude<SortKey, "name">, (coin: DisplayCoin) => number | null> = {
+  marketCap: (c) => c.marketCap,
+  price: (c) => c.price,
   change24h: (c) => c.change24hPct,
-  volume: (c) => c.volume24hUsd,
+  volume: (c) => c.volume24h,
 };
 
-function byRank(a: MarketCoin, b: MarketCoin): number {
+function byRank(a: DisplayCoin, b: DisplayCoin): number {
   return (a.rank ?? Number.POSITIVE_INFINITY) - (b.rank ?? Number.POSITIVE_INFINITY);
 }
 
@@ -36,7 +36,7 @@ function byRank(a: MarketCoin, b: MarketCoin): number {
  * so "highest change first" never starts with assets we know nothing about.
  * Ties fall back to market-cap rank to keep the order stable between refreshes.
  */
-export function sortCoins(coins: readonly MarketCoin[], sort: SortState): MarketCoin[] {
+export function sortCoins(coins: readonly DisplayCoin[], sort: SortState): DisplayCoin[] {
   const factor = sort.direction === "asc" ? 1 : -1;
 
   return [...coins].sort((a, b) => {
@@ -59,7 +59,7 @@ export interface CoinFilter {
   watchlist: ReadonlySet<string>;
 }
 
-export function filterCoins(coins: readonly MarketCoin[], filter: CoinFilter): MarketCoin[] {
+export function filterCoins(coins: readonly DisplayCoin[], filter: CoinFilter): DisplayCoin[] {
   const query = filter.query.trim().toLowerCase();
   return coins.filter(
     (coin) =>
@@ -71,10 +71,10 @@ export function filterCoins(coins: readonly MarketCoin[], filter: CoinFilter): M
   );
 }
 
-export function groupByCategory(coins: readonly MarketCoin[]): Record<CategoryId, MarketCoin[]> {
-  const groups = Object.fromEntries(CATEGORY_IDS.map((id) => [id, [] as MarketCoin[]])) as Record<
+export function groupByCategory(coins: readonly DisplayCoin[]): Record<CategoryId, DisplayCoin[]> {
+  const groups = Object.fromEntries(CATEGORY_IDS.map((id) => [id, [] as DisplayCoin[]])) as Record<
     CategoryId,
-    MarketCoin[]
+    DisplayCoin[]
   >;
   for (const coin of coins) groups[coin.category].push(coin);
   return groups;
@@ -83,7 +83,7 @@ export function groupByCategory(coins: readonly MarketCoin[]): Record<CategoryId
 export interface CategorySummary {
   count: number;
   /** Sum of known market caps; null when no asset in the group reports one. */
-  totalMarketCapUsd: number | null;
+  totalMarketCap: number | null;
   /**
    * 24h change of the group's combined value, derived from each asset's price
    * change: Σ cap / Σ (cap / (1 + change)) − 1. Averaging percentages, even
@@ -94,7 +94,7 @@ export interface CategorySummary {
   excludedCount: number;
 }
 
-export function summarizeCategory(coins: readonly MarketCoin[]): CategorySummary {
+export function summarizeCategory(coins: readonly DisplayCoin[]): CategorySummary {
   let totalNow = 0;
   let totalBefore = 0;
   let included = 0;
@@ -102,7 +102,7 @@ export function summarizeCategory(coins: readonly MarketCoin[]): CategorySummary
   let capCount = 0;
 
   for (const coin of coins) {
-    const cap = coin.marketCapUsd;
+    const cap = coin.marketCap;
     if (cap === null) continue;
     capSum += cap;
     capCount++;
@@ -116,7 +116,7 @@ export function summarizeCategory(coins: readonly MarketCoin[]): CategorySummary
 
   return {
     count: coins.length,
-    totalMarketCapUsd: capCount > 0 ? capSum : null,
+    totalMarketCap: capCount > 0 ? capSum : null,
     change24hPct: included > 0 && totalBefore > 0 ? (totalNow / totalBefore - 1) * 100 : null,
     excludedCount: coins.length - included,
   };

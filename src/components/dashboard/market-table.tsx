@@ -1,17 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { formatDuration, formatUsdCompact, formatUsdFull, formatUsdPrice } from "@/lib/format";
+import type { DisplayCoin } from "@/lib/currency-conversion";
+import {
+  formatCompactCurrency,
+  formatDuration,
+  formatFullCurrency,
+  formatPrice,
+} from "@/lib/format";
 import { quoteLagMs } from "@/lib/freshness";
 import type { SortKey, SortState } from "@/lib/market-view";
-import type { MarketCoin } from "@/shared/market";
+import type { Currency } from "@/shared/currency";
 import { AssetAvatar } from "../ui/asset-avatar";
 import { ArrowDownIcon, ArrowUpIcon, ClockIcon, SortIcon } from "../ui/icons";
 import { PriceChange } from "../ui/price-change";
 import { WatchToggle } from "../ui/watch-toggle";
 
 interface MarketTableProps {
-  coins: readonly MarketCoin[];
+  coins: readonly DisplayCoin[];
+  currency: Currency;
   labelledBy: string;
   sort: SortState;
   onSort: (key: SortKey) => void;
@@ -69,6 +76,7 @@ function SortableHeader({
 
 export function MarketTable({
   coins,
+  currency,
   labelledBy,
   sort,
   onSort,
@@ -104,6 +112,7 @@ export function MarketTable({
             <MarketRow
               key={coin.id}
               coin={coin}
+              currency={currency}
               fetchedAt={fetchedAt}
               isStale={isStale}
               watched={watchlist.has(coin.id)}
@@ -118,12 +127,14 @@ export function MarketTable({
 
 function MarketRow({
   coin,
+  currency,
   fetchedAt,
   isStale,
   watched,
   onToggleWatch,
 }: {
-  coin: MarketCoin;
+  coin: DisplayCoin;
+  currency: Currency;
   fetchedAt: string;
   isStale: boolean;
   watched: boolean;
@@ -172,7 +183,9 @@ function MarketRow({
               <span className="sr-only">Price may be outdated.</span>
             </span>
           )}
-          <span title={formatUsdFull(coin.priceUsd)}>{formatUsdPrice(coin.priceUsd)}</span>
+          <span title={formatFullCurrency(coin.price, currency)}>
+            {formatPrice(coin.price, currency)}
+          </span>
         </span>
         {/* Small screens show the 24h change under the price instead of in its own column. */}
         <div className="text-xs font-normal sm:hidden">
@@ -184,15 +197,15 @@ function MarketRow({
       </td>
       <td
         className={`hidden px-2 py-2.5 text-right whitespace-nowrap tabular-nums md:table-cell ${valueTone}`}
-        title={formatUsdFull(coin.volume24hUsd)}
+        title={formatFullCurrency(coin.volume24h, currency)}
       >
-        {formatUsdCompact(coin.volume24hUsd)}
+        {formatCompactCurrency(coin.volume24h, currency)}
       </td>
       <td
         className={`hidden px-2 py-2.5 text-right whitespace-nowrap tabular-nums sm:table-cell ${valueTone}`}
-        title={formatUsdFull(coin.marketCapUsd)}
+        title={formatFullCurrency(coin.marketCap, currency)}
       >
-        {formatUsdCompact(coin.marketCapUsd)}
+        {formatCompactCurrency(coin.marketCap, currency)}
       </td>
     </tr>
   );

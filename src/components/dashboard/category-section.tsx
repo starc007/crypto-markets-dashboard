@@ -1,6 +1,7 @@
-import { formatUsdCompact, formatUsdFull } from "@/lib/format";
+import { formatCompactCurrency, formatFullCurrency } from "@/lib/format";
 import type { CategorySummary } from "@/lib/market-view";
 import type { Category } from "@/shared/categories";
+import type { Currency } from "@/shared/currency";
 import { PriceChange } from "../ui/price-change";
 import type { ReactNode } from "react";
 
@@ -8,6 +9,7 @@ interface CategorySectionProps {
   category: Category;
   /** Totals for the whole category, independent of search filters. */
   summary: CategorySummary;
+  currency: Currency;
   visibleCount: number;
   children: (headingId: string) => ReactNode;
 }
@@ -15,6 +17,7 @@ interface CategorySectionProps {
 export function CategorySection({
   category,
   summary,
+  currency,
   visibleCount,
   children,
 }: CategorySectionProps) {
@@ -53,9 +56,9 @@ export function CategorySection({
             <dt className="text-muted">Market cap</dt>
             <dd
               className="font-medium tabular-nums"
-              title={formatUsdFull(summary.totalMarketCapUsd)}
+              title={formatFullCurrency(summary.totalMarketCap, currency)}
             >
-              {formatUsdCompact(summary.totalMarketCapUsd)}
+              {formatCompactCurrency(summary.totalMarketCap, currency)}
             </dd>
           </div>
           <div>

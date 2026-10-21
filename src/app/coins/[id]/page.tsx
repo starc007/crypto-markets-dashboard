@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { CoinDetail, CoinDetailSkeleton } from "@/components/coin/coin-detail";
 import { PageShell } from "@/components/page-shell";
 import { MarketDataUnavailableError, getCoinDetail } from "@/server/markets";
+import { getPreferredCurrency } from "@/server/preferences";
 import { isValidCoinId } from "@/shared/coin-id";
 
 export default function CoinPage({ params }: PageProps<"/coins/[id]">) {
@@ -20,6 +21,7 @@ async function InitialCoin({ params }: Pick<PageProps<"/coins/[id]">, "params">)
   await connection();
   const { id } = await params;
   if (!isValidCoinId(id)) notFound();
+  const initialCurrency = await getPreferredCurrency();
 
   let initialData = null;
   try {
@@ -28,5 +30,5 @@ async function InitialCoin({ params }: Pick<PageProps<"/coins/[id]">, "params">)
   } catch (error) {
     if (!(error instanceof MarketDataUnavailableError)) throw error;
   }
-  return <CoinDetail id={id} initialData={initialData} />;
+  return <CoinDetail id={id} initialData={initialData} initialCurrency={initialCurrency} />;
 }

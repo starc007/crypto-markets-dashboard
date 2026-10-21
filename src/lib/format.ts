@@ -4,12 +4,15 @@
  * Rules, each covered by tests:
  * - Missing or non-finite values render as an em dash, never as 0.
  * - A non-zero price never rounds to "$0.00"; small prices keep 4 significant digits.
+ * - Currency symbols come from Intl, so EUR and GBP follow the same rules as USD.
  * - Output never uses scientific notation (`5.16e-6` → "$0.00000516").
  * - The direction (and colour) of a change is decided by the rounded value the
  *   user sees, so "-0.004%" shows as "0.00%", neutral, not red "-0.00%".
  *
  * The locale is fixed so server and client render identical strings.
  */
+
+import type { Currency } from "@/shared/currency";
 
 export const LOCALE = "en-US";
 export const NOT_AVAILABLE = "—";
@@ -37,24 +40,27 @@ function fractionDigitsForSmall(abs: number): number {
   return Math.min(100, leadingZeros + 4);
 }
 
-export function formatUsdPrice(value: number | null | undefined): string {
+export function formatPrice(value: number | null | undefined, currency: Currency): string {
   if (!isPresent(value)) return NOT_AVAILABLE;
   const abs = Math.abs(value);
   const maximumFractionDigits = abs === 0 || abs >= 1 ? 2 : fractionDigitsForSmall(abs);
   return formatter({
     style: "currency",
-    currency: "USD",
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits,
   }).format(value);
 }
 
-/** Compact currency for large aggregates: "$1.67T", "$27.98B", "$812.34". */
-export function formatUsdCompact(value: number | null | undefined): string {
+/** Compact currency for large aggregates: "$1.67T", "€27.98B", "£812.34". */
+export function formatCompactCurrency(
+  value: number | null | undefined,
+  currency: Currency,
+): string {
   if (!isPresent(value)) return NOT_AVAILABLE;
   return formatter({
     style: "currency",
-    currency: "USD",
+    currency,
     notation: "compact",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -62,11 +68,11 @@ export function formatUsdCompact(value: number | null | undefined): string {
 }
 
 /** Full-precision currency, used for tooltips and accessible labels next to compact values. */
-export function formatUsdFull(value: number | null | undefined): string {
+export function formatFullCurrency(value: number | null | undefined, currency: Currency): string {
   if (!isPresent(value)) return NOT_AVAILABLE;
   return Math.abs(value) < 1
-    ? formatUsdPrice(value)
-    : formatter({ style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(value);
+    ? formatPrice(value, currency)
+    : formatter({ style: "currency", currency, maximumFractionDigits: 2 }).format(value);
 }
 
 export function formatCompactNumber(value: number | null | undefined): string {

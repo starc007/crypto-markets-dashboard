@@ -1,4 +1,4 @@
-import { makeCoin } from "@/test/factories";
+import { makeDisplayCoin as makeCoin } from "@/test/factories";
 import { filterCoins, groupByCategory, sortCoins, summarizeCategory } from "./market-view";
 
 const btc = makeCoin({
@@ -6,9 +6,9 @@ const btc = makeCoin({
   name: "Bitcoin",
   symbol: "BTC",
   rank: 1,
-  priceUsd: 83_000,
+  price: 83_000,
   change24hPct: 2,
-  marketCapUsd: 1_600,
+  marketCap: 1_600,
   category: "A",
 });
 const eth = makeCoin({
@@ -16,9 +16,9 @@ const eth = makeCoin({
   name: "Ethereum",
   symbol: "ETH",
   rank: 2,
-  priceUsd: 2_400,
+  price: 2_400,
   change24hPct: -1,
-  marketCapUsd: 300,
+  marketCap: 300,
   category: "A",
 });
 const usdt = makeCoin({
@@ -26,9 +26,9 @@ const usdt = makeCoin({
   name: "Tether",
   symbol: "USDT",
   rank: 3,
-  priceUsd: 1,
+  price: 1,
   change24hPct: null,
-  marketCapUsd: 180,
+  marketCap: 180,
   category: "B",
 });
 const shib = makeCoin({
@@ -36,9 +36,9 @@ const shib = makeCoin({
   name: "Shiba Inu",
   symbol: "SHIB",
   rank: 36,
-  priceUsd: 0.000005,
+  price: 0.000005,
   change24hPct: 4,
-  marketCapUsd: null,
+  marketCap: null,
   category: "C",
 });
 const all = [shib, usdt, eth, btc];
@@ -120,29 +120,29 @@ describe("groupByCategory", () => {
 describe("summarizeCategory", () => {
   it("computes the change in combined value, not the average of percentages", () => {
     // Before: 100 + 100 = 200. After: +100% → 200, −50% → 50. Combined: 250 (+25%).
-    const up = makeCoin({ id: "up", marketCapUsd: 200, change24hPct: 100 });
-    const down = makeCoin({ id: "down", marketCapUsd: 50, change24hPct: -50 });
+    const up = makeCoin({ id: "up", marketCap: 200, change24hPct: 100 });
+    const down = makeCoin({ id: "down", marketCap: 50, change24hPct: -50 });
     const summary = summarizeCategory([up, down]);
-    expect(summary.totalMarketCapUsd).toBe(250);
+    expect(summary.totalMarketCap).toBe(250);
     expect(summary.change24hPct).toBeCloseTo(25, 10);
   });
 
   it("excludes assets with missing values and reports how many", () => {
     const summary = summarizeCategory([btc, usdt, shib]);
     expect(summary.count).toBe(3);
-    expect(summary.totalMarketCapUsd).toBe(1_780);
+    expect(summary.totalMarketCap).toBe(1_780);
     expect(summary.change24hPct).toBeCloseTo(2, 10);
     expect(summary.excludedCount).toBe(2);
   });
 
   it("returns nulls rather than zeros when nothing is known", () => {
     expect(summarizeCategory([shib])).toMatchObject({
-      totalMarketCapUsd: null,
+      totalMarketCap: null,
       change24hPct: null,
     });
     expect(summarizeCategory([])).toMatchObject({
       count: 0,
-      totalMarketCapUsd: null,
+      totalMarketCap: null,
       change24hPct: null,
     });
   });

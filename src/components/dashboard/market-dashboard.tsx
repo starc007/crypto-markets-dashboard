@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useCurrencyPreference, useDisplayCurrency } from "@/hooks/use-currency";
 import { useMarkets } from "@/hooks/use-market-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import {
@@ -13,8 +14,11 @@ import {
   type SortKey,
   type SortState,
 } from "@/lib/market-view";
+import { toDisplayCoin } from "@/lib/currency-conversion";
 import { CATEGORIES, CATEGORY_IDS } from "@/shared/categories";
+import type { Currency } from "@/shared/currency";
 import type { MarketsResponse } from "@/shared/market";
+import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
 import { FreshnessBanner, FreshnessIndicator, useFreshness } from "../freshness/freshness";
 import { ErrorState } from "../ui/error-state";
 import { CategorySection } from "./category-section";
@@ -22,7 +26,12 @@ import { DashboardSkeleton } from "./dashboard-skeleton";
 import { MarketTable } from "./market-table";
 import { Toolbar, type CategoryFilter } from "./toolbar";
 
-export function MarketDashboard({ initialData }: { initialData: MarketsResponse | null }) {
+interface MarketDashboardProps {
+  initialData: MarketsResponse | null;
+  initialCurrency: Currency;
+}
+
+export function MarketDashboard({ initialData, initialCurrency }: MarketDashboardProps) {
   const { data, error, isError, refetch, isRefetching } = useMarkets(initialData);
 
   if (!data) {
@@ -32,14 +41,22 @@ export function MarketDashboard({ initialData }: { initialData: MarketsResponse 
       <DashboardSkeleton />
     );
   }
-  return <MarketsView data={data} clientError={isError ? error : null} />;
+  return (
+    <MarketsView
+      data={data}
+      initialCurrency={initialCurrency}
+      clientError={isError ? error : null}
+    />
+  );
 }
 
 function MarketsView({
   data,
+  initialCurrency,
   clientError,
 }: {
   data: MarketsResponse & { receivedAt: number };
+  initialCurrency: Currency;
   clientError: Error | null;
 }) {
   const [query, setQuery] = useState("");
@@ -48,14 +65,22 @@ function MarketsView({
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const { watchlist, toggle } = useWatchlist();
   const freshness = useFreshness(data.meta, data.receivedAt, clientError);
+  const { currency: requestedCurrency, setCurrency } = useCurrencyPreference(initialCurrency);
+  const display = useDisplayCurrency(requestedCurrency, data.fx);
+  const { currency } = display.converter;
 
-  const groups = useMemo(() => groupByCategory(data.coins), [data.coins]);
+  // Convert first, so sorting, filtering and category totals all use displayed values.
+  const coins = useMemo(
+    () => data.coins.map((coin) => toDisplayCoin(coin, display.converter)),
+    [data.coins, display.converter],
+  );
+  const groups = useMemo(() => groupByCategory(coins), [coins]);
   const visibleGroups = useMemo(
     () =>
       groupByCategory(
-        sortCoins(filterCoins(data.coins, { query, category, watchlistOnly, watchlist }), sort),
+        sortCoins(filterCoins(coins, { query, category, watchlistOnly, watchlist }), sort),
       ),
-    [data.coins, query, category, watchlistOnly, watchlist, sort],
+    [coins, query, category, watchlistOnly, watchlist, sort],
   );
   const visibleCount = CATEGORY_IDS.reduce((n, id) => n + visibleGroups[id].length, 0);
   const isFiltered = query.trim() !== "" || category !== "all" || watchlistOnly;
@@ -78,9 +103,10 @@ function MarketsView({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <FreshnessIndicator state={freshness} />
-        <p className="text-xs text-muted">Prices in USD · Data from CoinGecko</p>
+        <CurrencySwitcher value={currency} onChange={setCurrency} fx={data.fx} />
       </div>
       <FreshnessBanner state={freshness} />
+      <ConversionNote display={display} fx={data.fx} />
 
       <Toolbar
         query={query}
@@ -124,11 +150,13 @@ function MarketsView({
             key={id}
             category={CATEGORIES[id]}
             summary={summarizeCategory(groups[id])}
+            currency={currency}
             visibleCount={visibleGroups[id].length}
           >
             {(headingId) => (
               <MarketTable
                 coins={visibleGroups[id]}
+                currency={currency}
                 labelledBy={headingId}
                 sort={sort}
                 onSort={handleSort}
@@ -141,6 +169,7 @@ function MarketsView({
           </CategorySection>
         ))
       )}
+      <p className="text-xs text-muted">Market data from CoinGecko.</p>
     </div>
   );
 }
