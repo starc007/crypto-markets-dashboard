@@ -165,7 +165,9 @@ function toMeta(snapshot: Snapshot, now: number): SnapshotMeta {
 export async function getMarkets(now = Date.now()): Promise<MarketsResponse> {
   const snapshot = await readSnapshot();
   return {
-    coins: snapshot.markets.value.quotes.map(enrichQuote),
+    coins: snapshot.markets.value.quotes.map((quote) =>
+      enrichQuote(quote, snapshot.markets.value.sparklines.get(quote.id) ?? null),
+    ),
     fx: snapshot.fx,
     meta: toMeta(snapshot, now),
   };
@@ -179,9 +181,10 @@ export async function getCoinDetail(
   const snapshot = await readSnapshot();
   const quote = snapshot.markets.value.quotes.find((q) => q.id === id);
   if (!quote) return null;
+  const sparkline = snapshot.markets.value.sparklines.get(id) ?? null;
   return {
-    coin: enrichQuote(quote),
-    sparkline7d: snapshot.markets.value.sparklines.get(id) ?? null,
+    coin: enrichQuote(quote, sparkline),
+    sparkline7d: sparkline,
     fx: snapshot.fx,
     meta: toMeta(snapshot, now),
   };

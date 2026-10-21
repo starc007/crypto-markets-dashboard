@@ -16,6 +16,7 @@ import { AssetAvatar } from "../ui/asset-avatar";
 import { FlashOnChange } from "../ui/flash-on-change";
 import { ArrowDownIcon, ArrowUpIcon, ClockIcon, SortIcon } from "../ui/icons";
 import { PriceChange } from "../ui/price-change";
+import { Sparkline } from "../ui/sparkline";
 import { WatchToggle } from "../ui/watch-toggle";
 
 interface MarketTableProps {
@@ -107,6 +108,9 @@ export function MarketTable({
             {NUMERIC_COLUMNS.map((column) => (
               <SortableHeader key={column.key} column={column} sort={sort} onSort={onSort} />
             ))}
+            <th scope="col" className="hidden px-2 py-2 pr-4 text-right font-medium lg:table-cell">
+              Last 7 days
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -220,6 +224,9 @@ function MarketRow({
         title={formatFullCurrency(coin.marketCap, currency)}
       >
         {formatCompactCurrency(coin.marketCap, currency)}
+      </td>
+      <td className="hidden px-2 py-2.5 pr-4 text-right lg:table-cell">
+        <Sparkline values={coin.trend7d} />
       </td>
     </motion.tr>
   );

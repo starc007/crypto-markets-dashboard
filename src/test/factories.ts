@@ -20,6 +20,7 @@ export function makeCoin(overrides: Partial<MarketCoin> & Pick<MarketCoin, "id">
     category: "A",
     accent: deriveAccent("#3366FF"),
     hasCuratedMetadata: true,
+    trend7d: null,
     ...overrides,
   };
 }

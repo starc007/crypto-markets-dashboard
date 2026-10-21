@@ -56,6 +56,7 @@ export interface DisplayCoin extends Pick<
   | "accent"
   | "circulatingSupply"
   | "lastUpdated"
+  | "trend7d"
 > {
   price: number | null;
   change24hPct: number | null;
@@ -76,6 +77,8 @@ export function toDisplayCoin(coin: MarketCoin, converter: CurrencyConverter): D
     accent: coin.accent,
     circulatingSupply: coin.circulatingSupply,
     lastUpdated: coin.lastUpdated,
+    // Scaling by a constant rate doesn't change a sparkline's shape, so it stays in USD.
+    trend7d: coin.trend7d,
     price: converter.amount(coin.priceUsd),
     change24hPct: converter.change(coin.change24hPct),
     volume24h: converter.amount(coin.volume24hUsd),

@@ -31,6 +31,11 @@ export interface MarketCoin extends MarketQuote {
   accent: AccentColor;
   /** False when the asset is not in our curated metadata and fallbacks were applied. */
   hasCuratedMetadata: boolean;
+  /**
+   * A light 7-day USD price series for row sparklines (every ~4 hours). The
+   * full hourly series is only sent with asset details.
+   */
+  trend7d: number[] | null;
 }
 
 export type UpstreamErrorCode =
