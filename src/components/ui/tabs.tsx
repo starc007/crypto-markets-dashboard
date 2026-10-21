@@ -40,7 +40,7 @@ export function Tabs<T extends string>({
 
   return (
     <fieldset
-      className={`inline-flex rounded-lg border border-border bg-surface p-0.5 ${className}`}
+      className={`inline-flex rounded-lg border border-border bg-surface-muted p-0.5 ${className}`}
     >
       <legend className="sr-only">{label}</legend>
       {options.map((option) => {
@@ -66,7 +66,7 @@ export function Tabs<T extends string>({
               <motion.span
                 layoutId={`${groupId}-indicator`}
                 aria-hidden="true"
-                className="absolute inset-0 rounded-md bg-surface-muted shadow-sm ring-1 ring-border"
+                className="absolute inset-0 rounded-md bg-surface shadow-card ring-1 ring-border"
                 transition={{ type: "spring", bounce: 0.15, duration: 0.35 }}
               />
             )}

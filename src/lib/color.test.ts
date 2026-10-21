@@ -1,6 +1,6 @@
 import {
   MIN_GRAPHIC_CONTRAST,
-  THEME_SURFACES,
+  SURFACE,
   contrastRatio,
   deriveAccent,
   ensureContrast,
@@ -16,31 +16,26 @@ describe("contrastRatio", () => {
 
 describe("ensureContrast", () => {
   it("leaves colours that already contrast untouched", () => {
-    expect(ensureContrast("#627EEA", THEME_SURFACES.dark)).toBe("#627EEA");
+    expect(ensureContrast("#627EEA", SURFACE)).toBe("#627EEA");
   });
 
   it("lightens near-black brand colours on dark surfaces", () => {
-    const adjusted = ensureContrast("#23292F", THEME_SURFACES.dark);
+    const adjusted = ensureContrast("#23292F", "#0E1117");
     expect(adjusted).not.toBe("#23292F");
-    expect(contrastRatio(adjusted, THEME_SURFACES.dark)).toBeGreaterThanOrEqual(
-      MIN_GRAPHIC_CONTRAST,
-    );
+    expect(contrastRatio(adjusted, "#0E1117")).toBeGreaterThanOrEqual(MIN_GRAPHIC_CONTRAST);
   });
 
   it("darkens pale brand colours on light surfaces", () => {
-    const adjusted = ensureContrast("#97FCE4", THEME_SURFACES.light);
-    expect(contrastRatio(adjusted, THEME_SURFACES.light)).toBeGreaterThanOrEqual(
-      MIN_GRAPHIC_CONTRAST,
-    );
+    const adjusted = ensureContrast("#97FCE4", SURFACE);
+    expect(contrastRatio(adjusted, SURFACE)).toBeGreaterThanOrEqual(MIN_GRAPHIC_CONTRAST);
   });
 });
 
 describe("deriveAccent", () => {
-  it("keeps the brand colour and derives readable variants for both themes", () => {
-    const accent = deriveAccent("#f7931a");
-    expect(accent.brand).toBe("#F7931A");
-    expect(contrastRatio(accent.light, THEME_SURFACES.light)).toBeGreaterThanOrEqual(3);
-    expect(contrastRatio(accent.dark, THEME_SURFACES.dark)).toBeGreaterThanOrEqual(3);
+  it("keeps the brand colour and derives a readable display colour", () => {
+    const accent = deriveAccent("#97fce4");
+    expect(accent.brand).toBe("#97FCE4");
+    expect(contrastRatio(accent.display, SURFACE)).toBeGreaterThanOrEqual(3);
   });
 });
 

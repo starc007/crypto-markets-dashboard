@@ -11,12 +11,7 @@ export const metadata: Metadata = {
   description: "Top 50 cryptocurrencies by market capitalisation, grouped by category.",
 };
 
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f6f8" },
-    { media: "(prefers-color-scheme: dark)", color: "#090b10" },
-  ],
-};
+export const viewport: Viewport = { themeColor: "#f6f7f9" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (

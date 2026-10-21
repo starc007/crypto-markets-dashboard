@@ -13,7 +13,7 @@ interface AssetAvatarProps {
 export function AssetAvatar({ symbol, imageUrl, accent, size = 28 }: AssetAvatarProps) {
   return (
     <span
-      className="asset-accent relative inline-flex shrink-0 items-center justify-center rounded-full bg-surface-muted ring-2 ring-accent ring-offset-1 ring-offset-surface"
+      className="relative inline-flex shrink-0 items-center justify-center rounded-full bg-surface-muted ring-2 ring-accent ring-offset-1 ring-offset-surface"
       style={{ width: size, height: size, ...accentVars(accent) } as CSSProperties}
     >
       {imageUrl ? (

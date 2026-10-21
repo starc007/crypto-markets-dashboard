@@ -55,7 +55,7 @@ export function Toolbar(props: ToolbarProps) {
           placeholder="Search name or symbol"
           autoComplete="off"
           spellCheck={false}
-          className="h-10 w-full rounded-lg border border-border bg-surface pr-3 pl-9 text-sm placeholder:text-muted"
+          className="h-10 w-full rounded-lg border border-border bg-surface pr-3 pl-9 text-sm shadow-card transition-shadow placeholder:text-muted focus:border-focus/50 focus:ring-4 focus:ring-focus/10 focus:outline-none"
         />
       </div>
 
@@ -71,13 +71,13 @@ export function Toolbar(props: ToolbarProps) {
           type="button"
           aria-pressed={props.watchlistOnly}
           onClick={() => props.onWatchlistOnlyChange(!props.watchlistOnly)}
-          className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm ${
+          className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm shadow-card transition-colors ${
             props.watchlistOnly
-              ? "border-amber-500/60 bg-amber-500/10 font-medium text-fg"
+              ? "border-amber-300 bg-amber-50 font-medium text-fg"
               : "border-border bg-surface text-muted hover:text-fg"
           }`}
         >
-          <StarIcon filled={props.watchlistOnly} className="size-3.5 text-amber-500" />
+          <StarIcon filled={props.watchlistOnly} className="size-3.5 text-amber-600" />
           Watchlist
           <span className="tabular-nums">({props.watchlistCount})</span>
         </button>
@@ -94,7 +94,7 @@ export function Toolbar(props: ToolbarProps) {
               const [key, direction] = e.target.value.split(":") as [SortKey, SortDirection];
               onSortChange({ key, direction });
             }}
-            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm"
+            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm shadow-card"
           >
             {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => {
               const first = INITIAL_DIRECTION[key];

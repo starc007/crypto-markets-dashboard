@@ -1,47 +1,29 @@
 @import "tailwindcss";
 
 /*
- * Design tokens. Text colours meet WCAG AA (4.5:1) on --surface in both themes;
- * --surface values must match THEME_SURFACES in src/lib/color.ts.
+ * Design tokens for the single light theme. Text colours meet WCAG AA (4.5:1)
+ * on --surface; --surface must match SURFACE in src/lib/color.ts.
  */
 :root {
   color-scheme: light;
-  --bg: #f5f6f8;
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --surface-muted: #f0f2f5;
-  --border: #e2e5ea;
-  --text: #11151c;
-  --text-muted: #5b6472;
-  --up: #08794a;
-  --down: #c42b2b;
-  --warn-bg: #fff6e0;
-  --warn-border: #f0c75e;
-  --warn-text: #6b4a00;
-  --danger-bg: #fdecec;
-  --danger-border: #f1a3a3;
-  --danger-text: #8a1c1c;
+  --surface-muted: #f2f4f7;
+  --border: #e4e7ec;
+  --text: #101828;
+  --text-muted: #5d6676;
+  --up: #067647;
+  --down: #c01c28;
+  --up-flash: rgb(23 178 106 / 0.18);
+  --down-flash: rgb(240 68 56 / 0.16);
+  --warn-bg: #fffaeb;
+  --warn-border: #fedf89;
+  --warn-text: #93370d;
+  --danger-bg: #fef3f2;
+  --danger-border: #fecdca;
+  --danger-text: #b42318;
   --focus: #2563eb;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #090b10;
-    --surface: #0e1117;
-    --surface-muted: #161a22;
-    --border: #232936;
-    --text: #e8ebf0;
-    --text-muted: #949db0;
-    --up: #3ccf8e;
-    --down: #ff7070;
-    --warn-bg: #2a2110;
-    --warn-border: #6b5217;
-    --warn-text: #f5d38a;
-    --danger-bg: #2c1416;
-    --danger-border: #6e2a2e;
-    --danger-text: #ffb3b3;
-    --focus: #7aa2ff;
-  }
+  --accent: #8b93a1;
 }
 
 @theme inline {
@@ -63,26 +45,33 @@
   --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-/* Per-asset accent: components set --accent-light / --accent-dark inline. */
-.asset-accent {
-  --accent: var(--accent-light);
-}
-@media (prefers-color-scheme: dark) {
-  .asset-accent {
-    --accent: var(--accent-dark);
-  }
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(1200px 400px at 50% -120px, rgb(99 102 241 / 0.07), transparent 70%), var(--bg);
   color: var(--text);
 }
 
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/*
+ * Entrance for server-rendered content. A CSS animation runs from the first
+ * paint, so content never waits for JavaScript to become visible.
+ */
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.animate-enter {
+  animation: enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

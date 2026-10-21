@@ -1,12 +1,12 @@
 /**
- * Brand colours are chosen by the brand, not for our backgrounds: XRP is near
- * black and Hyperliquid is pale mint. We keep the curated colour as the source
- * of truth and derive per-theme accents that meet the WCAG 3:1 contrast ratio
- * for non-text UI (chart lines, rings, markers).
+ * Brand colours are chosen by the brand, not for our background: Hyperliquid
+ * is pale mint and Canton is pale yellow. We keep the curated colour as the
+ * source of truth and derive a display accent that meets the WCAG 3:1 contrast
+ * ratio for non-text UI (chart lines, rings, markers).
  */
 
-/** Must match `--surface` in globals.css for each theme. */
-export const THEME_SURFACES = { light: "#FFFFFF", dark: "#0E1117" } as const;
+/** Must match `--surface` in globals.css. */
+export const SURFACE = "#FFFFFF";
 
 export const MIN_GRAPHIC_CONTRAST = 3;
 
@@ -70,21 +70,15 @@ export function ensureContrast(
 export interface AccentColor {
   /** The curated brand colour, unmodified. */
   brand: string;
-  light: string;
-  dark: string;
+  /** The brand colour adjusted, if needed, to stay visible on our surface. */
+  display: string;
 }
 
 export function deriveAccent(brand: string): AccentColor {
-  return {
-    brand: toHex(parseHex(brand)),
-    light: ensureContrast(brand, THEME_SURFACES.light),
-    dark: ensureContrast(brand, THEME_SURFACES.dark),
-  };
+  return { brand: toHex(parseHex(brand)), display: ensureContrast(brand, SURFACE) };
 }
 
-/** CSS custom properties consumed by the `.asset-accent` class in globals.css. */
-export function accentVars(
-  accent: AccentColor,
-): Record<"--accent-light" | "--accent-dark", string> {
-  return { "--accent-light": accent.light, "--accent-dark": accent.dark };
+/** Sets `--accent`, which Tailwind exposes as the `accent` colour (e.g. `ring-accent`). */
+export function accentVars(accent: AccentColor): Record<"--accent", string> {
+  return { "--accent": accent.display };
 }
