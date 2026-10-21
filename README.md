@@ -11,7 +11,7 @@ A dashboard of the top 50 cryptocurrencies by market capitalisation. Prices upda
 - Purposeful motion: prices flash green or red when they change, rows glide when re-sorted, and charts draw in. All of it respects reduced motion.
 - Responsive and accessible: keyboard-operable controls, sort state exposed to screen readers, and live regions that don't spam.
 
-Design decisions, caching strategy and API quota calculations are in [DECISIONS.md](DECISIONS.md).
+Design decisions, caching strategy and API quota calculations are in [DECISIONS.md](DECISIONS.md). Hosting on Vercel or Cloudflare needs a few changes, described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Quick start
 
@@ -67,7 +67,7 @@ src/
 
 ## Known limitations
 
-- **The cache is per process.** Quota calculations assume one long-lived server. Running several instances, or serverless functions, multiplies upstream calls. See "First production improvements" in [DECISIONS.md](DECISIONS.md).
+- **The cache is per process.** Quota calculations assume one long-lived server. Running several instances, or serverless functions, multiplies upstream calls. [DEPLOYMENT.md](DEPLOYMENT.md) covers what changes for Vercel and Cloudflare.
 - **Restarts empty the caches,** and each restart costs two upstream calls.
 - **EUR and GBP values are converted from USD** at rates up to 2 hours old, and the 7-day chart uses today's rate. Details are in [DECISIONS.md](DECISIONS.md).
 - **Chart times are approximate.** The 7-day chart uses CoinGecko's sparkline, which has hourly points but no timestamps.
