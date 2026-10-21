@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CompareView } from "@/components/compare/compare-view";
 import { PageShell } from "@/components/page-shell";
-import { MarketDataUnavailableError, getMarkets } from "@/server/markets";
+import { getMarkets } from "@/server/markets";
+import { MarketDataUnavailableError } from "@/server/errors";
 import { isValidCoinId } from "@/shared/coin-id";
 import { MAX_COMPARED } from "@/shared/compare";
 

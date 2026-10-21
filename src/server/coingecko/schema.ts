@@ -92,8 +92,9 @@ const positiveNumber = z.number().positive();
 const fxSchema = z.object({
   bitcoin: z.object({
     usd: positiveNumber,
-    eur: positiveNumber,
-    gbp: positiveNumber,
+    // Optional individually: one currency going missing must not take the other down.
+    eur: positiveNumber.optional().catch(undefined),
+    gbp: positiveNumber.optional().catch(undefined),
     usd_24h_change: nullableNumber,
     eur_24h_change: nullableNumber,
     gbp_24h_change: nullableNumber,
@@ -117,11 +118,15 @@ export function parseFxRates(payload: unknown): FxRates | null {
     changeInCurrency === null || btc.usd_24h_change === null
       ? null
       : ((1 + changeInCurrency / 100) / (1 + btc.usd_24h_change / 100) - 1) * 100;
+  const rate = (price: number | undefined, change: number | null) =>
+    price === undefined
+      ? undefined
+      : { perUsd: price / btc.usd, rateChange24hPct: rateChange(change) };
 
-  return {
-    rates: {
-      EUR: { perUsd: btc.eur / btc.usd, rateChange24hPct: rateChange(btc.eur_24h_change) },
-      GBP: { perUsd: btc.gbp / btc.usd, rateChange24hPct: rateChange(btc.gbp_24h_change) },
-    },
-  };
+  const rates: FxRates["rates"] = {};
+  const eur = rate(btc.eur, btc.eur_24h_change);
+  const gbp = rate(btc.gbp, btc.gbp_24h_change);
+  if (eur) rates.EUR = eur;
+  if (gbp) rates.GBP = gbp;
+  return Object.keys(rates).length > 0 ? { rates } : null;
 }

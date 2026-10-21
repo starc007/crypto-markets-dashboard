@@ -8,6 +8,7 @@ import { SURFACE, contrastRatio } from "@/lib/color";
 import { buildFxUrl, buildMarketsUrl } from "@/server/coingecko/client";
 import { FX_REFRESH_INTERVAL_MS } from "@/server/config";
 import {
+  FX_MAX_AGE_MS,
   createMarketsSource,
   setMarketsSourceForTesting,
   type MarketsSource,
@@ -251,10 +252,10 @@ describe("exchange rates", () => {
     expect(fxUpstream.calls).toHaveLength(1);
     expect(new URL(fxUpstream.calls[0]!.url).search).toBe(FX_UPSTREAM.search);
     expect(fxUpstream.calls[0]!.headers.get("x-cg-demo-api-key")).toBe(API_KEY);
-    expect(fx!.rates.EUR.perUsd).toBeCloseTo(0.9, 12);
+    expect(fx!.rates.EUR!.perUsd).toBeCloseTo(0.9, 12);
     // (1.0149 / 1.02 − 1) × 100: the euro price of a dollar fell 0.5%.
-    expect(fx!.rates.EUR.rateChange24hPct).toBeCloseTo(-0.5, 10);
-    expect(fx!.rates.GBP.rateChange24hPct).toBeCloseTo(0.5, 10);
+    expect(fx!.rates.EUR!.rateChange24hPct).toBeCloseTo(-0.5, 10);
+    expect(fx!.rates.GBP!.rateChange24hPct).toBeCloseTo(0.5, 10);
   });
 
   it("refreshes rates every two hours, not with every price refresh", async () => {
@@ -281,6 +282,35 @@ describe("exchange rates", () => {
     expect(response.status).toBe(200);
     expect(body.coins).toHaveLength(50);
     expect(body.fx).toBeNull();
+  });
+
+  it("keeps a currency when only the other one is missing", async () => {
+    fxUpstream.respond = () => HttpResponse.json({ bitcoin: { ...FX_FIXTURE.bitcoin, gbp: null } });
+    const { fx } = await json<MarketsResponse>(await getMarkets());
+    expect(fx!.rates.EUR).toBeDefined();
+    expect(fx!.rates.GBP).toBeUndefined();
+  });
+
+  it("withholds rates once they are too old to trust", async () => {
+    await getMarkets();
+    fxUpstream.respond = () => new HttpResponse(null, { status: 500 });
+    advance(FX_MAX_AGE_MS + 1);
+    await getMarkets();
+    await settle();
+    expect((await json<MarketsResponse>(await getMarkets())).fx).toBeNull();
+  });
+
+  it("never retries a failing rate call more often than its normal interval", async () => {
+    // A 200 with a body that fails validation is still a billed call.
+    fxUpstream.respond = () => HttpResponse.json({ bitcoin: { usd: 0 } });
+    await getMarkets();
+    for (let elapsed = 0; elapsed < 24 * 60 * 60_000; elapsed += REFRESH_MS) {
+      advance(REFRESH_MS);
+      await getMarkets();
+      await settle();
+    }
+    // Backoff 15 s, 30 s … then every 2 h: a day of failure stays near a normal day's 12 calls.
+    expect(fxUpstream.calls.length).toBeLessThanOrEqual(12 + 10);
   });
 
   it("rejects malformed rate payloads", async () => {

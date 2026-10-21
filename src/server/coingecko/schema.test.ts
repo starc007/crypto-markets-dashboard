@@ -75,9 +75,9 @@ describe("parseFxRates", () => {
         gbp_24h_change: 1.9116221671586737,
       },
     })!;
-    expect(fx.rates.EUR.perUsd).toBeCloseTo(0.8905, 5);
-    expect(fx.rates.GBP.perUsd).toBeCloseTo(0.74661, 5);
-    expect(fx.rates.EUR.rateChange24hPct).toBeCloseTo(-0.19345, 4);
+    expect(fx.rates.EUR!.perUsd).toBeCloseTo(0.8905, 5);
+    expect(fx.rates.GBP!.perUsd).toBeCloseTo(0.74661, 5);
+    expect(fx.rates.EUR!.rateChange24hPct).toBeCloseTo(-0.19345, 4);
   });
 
   it("keeps rates but drops the change when a 24h change is missing", () => {
@@ -94,8 +94,15 @@ describe("parseFxRates", () => {
     expect(fx.rates.EUR).toEqual({ perUsd: 0.9, rateChange24hPct: null });
   });
 
-  it("rejects missing or non-positive prices", () => {
-    expect(parseFxRates({ bitcoin: { usd: 100, eur: 0, gbp: 80 } })).toBeNull();
+  it("drops only the currency whose price is unusable", () => {
+    expect(parseFxRates({ bitcoin: { usd: 100, eur: 0, gbp: 80 } })!.rates).toEqual({
+      GBP: { perUsd: 0.8, rateChange24hPct: null },
+    });
+  });
+
+  it("rejects payloads with no usable rate at all", () => {
+    expect(parseFxRates({ bitcoin: { usd: 100 } })).toBeNull();
+    expect(parseFxRates({ bitcoin: { usd: 0, eur: 90, gbp: 80 } })).toBeNull();
     expect(parseFxRates({ ethereum: {} })).toBeNull();
     expect(parseFxRates(null)).toBeNull();
   });

@@ -18,7 +18,8 @@ export interface FxRate {
 }
 
 export interface FxSnapshot {
-  rates: Record<ForeignCurrency, FxRate>;
+  /** A currency is absent when CoinGecko didn't return a usable price for it. */
+  rates: Partial<Record<ForeignCurrency, FxRate>>;
   /** When the server received these rates from CoinGecko (ISO 8601). */
   fetchedAt: string;
 }

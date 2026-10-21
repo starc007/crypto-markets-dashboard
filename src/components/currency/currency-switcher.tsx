@@ -24,7 +24,7 @@ export function CurrencySwitcher({ value, onChange, fx }: CurrencySwitcherProps)
     label: currency,
     description: CURRENCY_NAMES[currency],
     // Without rates we can't convert, so only USD stays selectable.
-    disabled: currency !== "USD" && !fx,
+    disabled: currency !== "USD" && !fx?.rates[currency],
   }));
   return <Tabs label="Currency" options={options} value={value} onChange={onChange} />;
 }

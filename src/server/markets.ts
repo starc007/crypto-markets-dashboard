@@ -8,6 +8,7 @@ import type {
   SnapshotMeta,
 } from "@/shared/market";
 import { CacheEmptyError, createSwrCache, type CacheRead, type SwrCache } from "./cache/swr-cache";
+import { MarketDataUnavailableError } from "./errors";
 import { fetchFxRates, fetchTopMarkets } from "./coingecko/client";
 import { UpstreamError, toUpstreamError } from "./coingecko/errors";
 import type { FxRates, ParsedMarkets } from "./coingecko/schema";
@@ -18,31 +19,24 @@ export interface MarketsSource {
   markets: SwrCache<ParsedMarkets, UpstreamError>;
   fx: SwrCache<FxRates, UpstreamError>;
   refreshIntervalMs: number;
+  now: () => number;
 }
 
 const FIRST_RETRY_MS = 15_000;
-const MAX_RETRY_MS = 5 * 60_000;
 
 /**
- * Exponential backoff (15s, 30s, 60s, …) capped at 5 minutes, which also caps
- * upstream calls during a long outage at the same rate as normal operation.
- * Retry-After from CoinGecko always wins when it asks for longer. A rejected
- * key will not fix itself, so it goes straight to the cap.
+ * Exponential backoff (15s, 30s, 60s, …) capped at the cache's own refresh
+ * interval, so a long failure never calls upstream more often than normal
+ * operation would. That matters for the quota: a 200 response whose body
+ * fails validation is still a billed call. Retry-After wins when it asks for
+ * longer, and a rejected key won't fix itself, so it goes straight to the cap.
  */
-export function retryDelayMs(error: UpstreamError, consecutiveFailures: number): number {
-  if (error.code === "UNAUTHORIZED") return MAX_RETRY_MS;
-  const backoff = Math.min(MAX_RETRY_MS, FIRST_RETRY_MS * 2 ** (consecutiveFailures - 1));
-  return Math.max(backoff, error.options.retryAfterMs ?? 0);
-}
-
-export class MarketDataUnavailableError extends Error {
-  constructor(
-    readonly code: UpstreamError["code"],
-    readonly retryAt: number,
-  ) {
-    super("Market data is unavailable");
-    this.name = "MarketDataUnavailableError";
-  }
+export function backoff(capMs: number) {
+  return (error: UpstreamError, consecutiveFailures: number): number => {
+    if (error.code === "UNAUTHORIZED") return capMs;
+    const delay = Math.min(capMs, FIRST_RETRY_MS * 2 ** (consecutiveFailures - 1));
+    return Math.max(delay, error.options.retryAfterMs ?? 0);
+  };
 }
 
 function logAndConvert(label: string) {
@@ -69,7 +63,7 @@ export function createMarketsSource(options: {
     ttlMs: options.refreshIntervalMs,
     // Matches the age at which the UI calls data stale.
     maxStaleMs: options.refreshIntervalMs * STALE_AFTER_INTERVALS,
-    retryDelayMs,
+    retryDelayMs: backoff(options.refreshIntervalMs),
     toError: logAndConvert("markets"),
     now: options.now,
   });
@@ -77,12 +71,17 @@ export function createMarketsSource(options: {
   const fx = createSwrCache({
     fetcher: () => fetchFxRates(options.apiKey),
     ttlMs: FX_REFRESH_INTERVAL_MS,
-    retryDelayMs,
+    retryDelayMs: backoff(FX_REFRESH_INTERVAL_MS),
     toError: logAndConvert("fx"),
     now: options.now,
   });
 
-  return { markets, fx, refreshIntervalMs: options.refreshIntervalMs };
+  return {
+    markets,
+    fx,
+    refreshIntervalMs: options.refreshIntervalMs,
+    now: options.now ?? Date.now,
+  };
 }
 
 /*
@@ -110,25 +109,43 @@ interface Snapshot {
   refreshIntervalMs: number;
 }
 
-/** How long a request may wait for rates on a cold start before answering USD-only. */
-const FX_WAIT_BUDGET_MS = 1_500;
+/** How much longer than the markets read a request may wait for rates before answering USD-only. */
+const FX_GRACE_MS = 300;
 
 /**
- * Rates are optional: missing or slow rates must never take prices down with
- * them. A cold fetch still completes in the background for later requests.
+ * Rates older than this are withheld: converting with day-old rates under an
+ * "up to date" badge would mislead, so EUR/GBP fall back to USD with a notice.
  */
-async function readFx(source: MarketsSource): Promise<FxSnapshot | null> {
+export const FX_MAX_AGE_MS = 3 * FX_REFRESH_INTERVAL_MS;
+
+/**
+ * Rates are optional: missing, slow or outdated rates must never take prices
+ * down with them. The wait is tied to the markets read rather than a fixed
+ * timer, so a cold start doesn't answer USD-only while markets is still
+ * loading anyway. A cold fetch still completes in the background.
+ */
+async function readFx(
+  source: MarketsSource,
+  marketsRead: Promise<unknown>,
+): Promise<FxSnapshot | null> {
   const read = source.fx.get().then(
-    (r): FxSnapshot => ({ ...r.value, fetchedAt: new Date(r.fetchedAt).toISOString() }),
+    (r): FxSnapshot | null =>
+      source.now() - r.fetchedAt > FX_MAX_AGE_MS
+        ? null
+        : { ...r.value, fetchedAt: new Date(r.fetchedAt).toISOString() },
     (error: unknown) => {
       if (error instanceof CacheEmptyError) return null;
       throw error;
     },
   );
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const budget = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), FX_WAIT_BUDGET_MS);
-  });
+  const budget = marketsRead.then(
+    () =>
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), FX_GRACE_MS);
+      }),
+    () => null, // A markets failure is reported by readMarkets.
+  );
   try {
     return await Promise.race([read, budget]);
   } finally {
@@ -148,13 +165,15 @@ async function readMarkets(source: MarketsSource) {
   }
 }
 
-async function readSnapshot(): Promise<Snapshot> {
+async function readSnapshot(): Promise<Snapshot & { generatedAt: number }> {
   const source = getMarketsSource();
-  const [markets, fx] = await Promise.all([readMarkets(source), readFx(source)]);
-  return { markets, fx, refreshIntervalMs: source.refreshIntervalMs };
+  const marketsRead = readMarkets(source);
+  const [markets, fx] = await Promise.all([marketsRead, readFx(source, marketsRead)]);
+  // Stamped after any waiting, so the reported age is never understated.
+  return { markets, fx, refreshIntervalMs: source.refreshIntervalMs, generatedAt: source.now() };
 }
 
-function toMeta(snapshot: Snapshot, now: number): SnapshotMeta {
+function toMeta(snapshot: Snapshot & { generatedAt: number }): SnapshotMeta {
   const { markets } = snapshot;
   const failure: RefreshFailure | null = markets.failure && {
     code: markets.failure.error.code,
@@ -163,20 +182,20 @@ function toMeta(snapshot: Snapshot, now: number): SnapshotMeta {
   };
   return {
     fetchedAt: new Date(markets.fetchedAt).toISOString(),
-    generatedAt: new Date(now).toISOString(),
+    generatedAt: new Date(snapshot.generatedAt).toISOString(),
     refreshIntervalMs: snapshot.refreshIntervalMs,
     lastRefreshFailure: failure,
   };
 }
 
-export async function getMarkets(now = Date.now()): Promise<MarketsResponse> {
+export async function getMarkets(): Promise<MarketsResponse> {
   const snapshot = await readSnapshot();
   return {
     coins: snapshot.markets.value.quotes.map((quote) =>
       enrichQuote(quote, snapshot.markets.value.sparklines.get(quote.id) ?? null),
     ),
     fx: snapshot.fx,
-    meta: toMeta(snapshot, now),
+    meta: toMeta(snapshot),
   };
 }
 

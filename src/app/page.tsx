@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { MarketDashboard } from "@/components/dashboard/market-dashboard";
 import { PageShell } from "@/components/page-shell";
-import { MarketDataUnavailableError, getMarkets } from "@/server/markets";
+import { getMarkets } from "@/server/markets";
+import { MarketDataUnavailableError } from "@/server/errors";
 import { getPreferredCurrency } from "@/server/preferences";
 
 export default function HomePage() {

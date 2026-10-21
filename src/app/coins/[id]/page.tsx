@@ -4,12 +4,8 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { CoinDetail, CoinDetailSkeleton } from "@/components/coin/coin-detail";
 import { PageShell } from "@/components/page-shell";
-import {
-  MarketDataUnavailableError,
-  getCoinHistory,
-  getCoinName,
-  getMarkets,
-} from "@/server/markets";
+import { getCoinHistory, getCoinName, getMarkets } from "@/server/markets";
+import { MarketDataUnavailableError } from "@/server/errors";
 import { getPreferredCurrency } from "@/server/preferences";
 import { isValidCoinId } from "@/shared/coin-id";
 

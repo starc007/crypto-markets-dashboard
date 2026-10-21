@@ -1,6 +1,6 @@
 import "server-only";
 import type { ApiErrorBody, ApiErrorCode } from "@/shared/market";
-import { MarketDataUnavailableError } from "./markets";
+import { MarketDataUnavailableError } from "./errors";
 
 /*
  * Responses are cheap to produce from memory, and their `generatedAt` must be
