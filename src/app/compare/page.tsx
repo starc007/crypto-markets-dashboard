@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { CompareView } from "@/components/compare/compare-view";
 import { PageShell } from "@/components/page-shell";
+import { MarketDataUnavailableError, getMarkets } from "@/server/markets";
 import { isValidCoinId } from "@/shared/coin-id";
 import { MAX_COMPARED } from "@/shared/compare";
 
@@ -31,5 +32,13 @@ async function CompareLoader({ searchParams }: Pick<PageProps<"/compare">, "sear
         .filter(isValidCoinId),
     ),
   ].slice(0, MAX_COMPARED);
-  return <CompareView initialIds={ids} />;
+
+  // Server-render with the shared snapshot, like every other page.
+  let initialMarkets = null;
+  try {
+    initialMarkets = await getMarkets();
+  } catch (error) {
+    if (!(error instanceof MarketDataUnavailableError)) throw error;
+  }
+  return <CompareView initialIds={ids} initialMarkets={initialMarkets} />;
 }

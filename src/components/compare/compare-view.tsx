@@ -1,65 +1,91 @@
 "use client";
 
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState, type KeyboardEvent } from "react";
-import { historyQuery, useMarketsSnapshot } from "@/hooks/use-market-data";
+import { useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useFreshness, type ConnectionState } from "@/hooks/use-freshness";
+import { historyQuery, useMarkets } from "@/hooks/use-market-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
-import { formatDuration } from "@/lib/format";
+import type { Received } from "@/lib/api-client";
 import { alignPerformance } from "@/lib/performance";
 import { searchAssets } from "@/lib/search";
 import { MAX_COMPARED } from "@/shared/compare";
-import type { CoinHistoryResponse, MarketCoin } from "@/shared/market";
+import type { CoinHistoryResponse, MarketCoin, MarketsResponse } from "@/shared/market";
+import { FreshnessBanner, FreshnessIndicator } from "../freshness/freshness";
 import { AssetAvatar } from "../ui/asset-avatar";
 import { ErrorState } from "../ui/error-state";
 import { SearchIcon } from "../ui/icons";
 import { CompareChart, type CompareSeries } from "./compare-chart";
 
 const DEFAULT_COUNT = 3;
+/** A full 7-day hourly series has 168 points, so it spans 167 hourly steps. */
 const FULL_WEEK_HOURS = 7 * 24 - 1;
+
+type HistoryResult = UseQueryResult<Received<CoinHistoryResponse>>;
+
+/** Folds the per-asset history queries into one state. Module-level, so TanStack can memoise it. */
+function combineHistories(results: HistoryResult[]) {
+  return {
+    data: results.every((r) => r.data) ? results.map((r): CoinHistoryResponse => r.data!) : null,
+    // With previous data kept as a placeholder, only a failure with nothing to show counts.
+    isError: results.some((r) => r.isError && !r.data),
+    refetch: () => results.forEach((r) => void r.refetch()),
+  };
+}
+
+function describeSpan(hours: number): string {
+  return hours >= FULL_WEEK_HOURS
+    ? "the last 7 days"
+    : `the last ${(hours / 24).toFixed(1)} days, the shortest history among these assets`;
+}
 
 /**
  * Compares up to five assets' 7-day performance. The selection lives in the
- * URL (`/compare?ids=bitcoin,ethereum`), so a comparison can be shared. Hourly
- * histories come from the cached snapshot, keyed to the same snapshot as the
- * names and colours, so comparing costs no upstream quota.
+ * URL (`/compare?ids=bitcoin,ethereum`), so a comparison can be shared. Prices
+ * come from the same polled snapshot as every other page, and hourly histories
+ * are keyed to that snapshot, so comparing costs no upstream quota.
  */
-export function CompareView({ initialIds }: { initialIds: string[] }) {
+export function CompareView({
+  initialIds,
+  initialMarkets,
+}: {
+  initialIds: string[];
+  initialMarkets: MarketsResponse | null;
+}) {
   const router = useRouter();
-  const { data: markets, isError, error, refetch, isRefetching } = useMarketsSnapshot();
+  const markets = useMarkets(initialMarkets);
+  const { data, isError, error, refetch, isRefetching, fetchStatus } = markets;
   const { watchlist } = useWatchlist();
   const [chosen, setChosen] = useState<string[] | null>(initialIds.length ? initialIds : null);
 
-  const byId = useMemo(
-    () => new Map((markets?.coins ?? []).map((coin) => [coin.id, coin])),
-    [markets],
-  );
+  const byId = useMemo(() => new Map((data?.coins ?? []).map((coin) => [coin.id, coin])), [data]);
 
   // Until the user picks, start from their watchlist, or the largest assets.
   const ids = useMemo(() => {
-    if (chosen) return chosen.filter((id) => byId.has(id) || !markets);
+    if (chosen) return chosen.filter((id) => byId.has(id) || !data);
     const watched = [...watchlist].filter((id) => byId.has(id));
     if (watched.length >= 2) return watched.slice(0, DEFAULT_COUNT);
-    return [...(markets?.coins ?? [])]
+    return [...(data?.coins ?? [])]
       .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
       .slice(0, DEFAULT_COUNT)
       .map((coin) => coin.id);
-  }, [chosen, watchlist, byId, markets]);
+  }, [chosen, watchlist, byId, data]);
 
   function update(next: string[]) {
     setChosen(next);
     router.replace(next.length ? `/compare?ids=${next.join(",")}` : "/compare", { scroll: false });
   }
 
-  const fetchedAt = markets?.meta.fetchedAt;
-  const histories = useQueries({ queries: ids.map((id) => historyQuery(id, fetchedAt)) });
+  const fetchedAt = data?.meta.fetchedAt;
+  const histories = useQueries({
+    queries: ids.map((id) => historyQuery(id, fetchedAt)),
+    combine: combineHistories,
+  });
 
-  const ready = fetchedAt !== undefined && histories.every((q) => q.data);
   const compared = useMemo(() => {
-    if (!ready) return null;
-    const withHistory = histories
-      .map((q): CoinHistoryResponse => q.data!)
+    if (!histories.data || fetchedAt === undefined) return null;
+    const withHistory = histories.data
       .filter((h): h is CoinHistoryResponse & { prices: number[] } => h.prices !== null)
       .map((h) => ({ prices: h.prices, coin: byId.get(h.id) }))
       .filter((h): h is { prices: number[]; coin: MarketCoin } => h.coin !== undefined);
@@ -68,21 +94,88 @@ export function CompareView({ initialIds }: { initialIds: string[] }) {
       id: coin.id,
       symbol: coin.symbol,
       name: coin.name,
-      color: coin.accent.display,
+      color: coin.accent,
       values: series[i] ?? [],
     }));
-    const missing = histories.length - withHistory.length;
+    const missing = histories.data.length - withHistory.length;
     return { lines, spanHours, missing, endTime: Date.parse(fetchedAt) };
-  }, [ready, histories, byId, fetchedAt]);
+  }, [histories.data, byId, fetchedAt]);
 
-  if (!markets && isError) {
-    return <ErrorState error={error} onRetry={() => refetch()} retrying={isRefetching} />;
+  if (!data) {
+    return isError ? (
+      <ErrorState error={error} onRetry={() => refetch()} retrying={isRefetching} />
+    ) : (
+      <div aria-busy="true" className="h-96 animate-pulse rounded-2xl bg-surface-muted" />
+    );
   }
 
   const selected = ids.map((id) => byId.get(id)).filter((c): c is MarketCoin => !!c);
 
   return (
+    <CompareContent
+      data={data}
+      connection={{ error: isError ? error : null, offline: fetchStatus === "paused" }}
+      selected={selected}
+      ids={ids}
+      onChange={update}
+      chart={
+        selected.length < 2 ? (
+          <p className="py-16 text-center text-sm text-muted">
+            Add at least two assets to compare their performance.
+          </p>
+        ) : histories.isError ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted">
+            <p>We couldn&apos;t load price history for these assets.</p>
+            <button
+              type="button"
+              onClick={histories.refetch}
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-fg shadow-card transition-colors hover:bg-surface-muted"
+            >
+              Try again
+            </button>
+          </div>
+        ) : !compared ? (
+          <div aria-busy="true" className="h-80 animate-pulse rounded-lg bg-surface-muted" />
+        ) : compared.lines.length < 2 ? (
+          <p className="py-16 text-center text-sm text-muted">
+            Not enough price history to compare these assets.
+          </p>
+        ) : (
+          <>
+            <CompareChart series={compared.lines} endTime={compared.endTime} />
+            <p className="mt-3 text-xs text-muted">
+              Compared over {describeSpan(compared.spanHours)}. Performance is measured in USD.
+              {compared.missing > 0 &&
+                ` ${compared.missing} ${compared.missing === 1 ? "asset has" : "assets have"} no history and ${compared.missing === 1 ? "is" : "are"} left out.`}
+            </p>
+          </>
+        )
+      }
+    />
+  );
+}
+
+function CompareContent({
+  data,
+  connection,
+  selected,
+  ids,
+  onChange,
+  chart,
+}: {
+  data: Received<MarketsResponse>;
+  connection: ConnectionState;
+  selected: MarketCoin[];
+  ids: string[];
+  onChange: (ids: string[]) => void;
+  chart: ReactNode;
+}) {
+  const freshness = useFreshness(data.meta, data.receivedAt, connection);
+
+  return (
     <div className="flex flex-col gap-4">
+      <FreshnessIndicator state={freshness} />
+      <FreshnessBanner state={freshness} />
       <div className="flex flex-wrap items-center gap-2">
         <AnimatePresence initial={false}>
           {selected.map((coin) => (
@@ -104,7 +197,7 @@ export function CompareView({ initialIds }: { initialIds: string[] }) {
               <button
                 type="button"
                 aria-label={`Remove ${coin.name}`}
-                onClick={() => update(ids.filter((id) => id !== coin.id))}
+                onClick={() => onChange(ids.filter((id) => id !== coin.id))}
                 className="inline-flex size-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-muted hover:text-fg"
               >
                 ×
@@ -113,39 +206,15 @@ export function CompareView({ initialIds }: { initialIds: string[] }) {
           ))}
         </AnimatePresence>
         <AssetPicker
-          coins={markets?.coins ?? []}
+          coins={data.coins}
           exclude={ids}
           disabled={ids.length >= MAX_COMPARED}
-          onPick={(id) => update([...ids, id])}
+          onPick={(id) => onChange([...ids, id])}
         />
       </div>
 
       <section className="rounded-2xl border border-border bg-surface p-4 shadow-card">
-        {!markets ? (
-          <div aria-busy="true" className="h-80 animate-pulse rounded-lg bg-surface-muted" />
-        ) : selected.length < 2 ? (
-          <p className="py-16 text-center text-sm text-muted">
-            Add at least two assets to compare their performance.
-          </p>
-        ) : !compared ? (
-          <div aria-busy="true" className="h-80 animate-pulse rounded-lg bg-surface-muted" />
-        ) : compared.lines.length < 2 ? (
-          <p className="py-16 text-center text-sm text-muted">
-            Not enough price history to compare these assets.
-          </p>
-        ) : (
-          <>
-            <CompareChart series={compared.lines} endTime={compared.endTime} />
-            <p className="mt-3 text-xs text-muted">
-              {compared.spanHours < FULL_WEEK_HOURS
-                ? `Compared over the last ${formatDuration(compared.spanHours * 3_600_000)}, the shortest history among these assets. `
-                : "Compared over the last 7 days. "}
-              Performance is measured in USD.
-              {compared.missing > 0 &&
-                ` ${compared.missing} asset(s) have no history and are left out.`}
-            </p>
-          </>
-        )}
+        {chart}
       </section>
     </div>
   );
