@@ -8,6 +8,7 @@ import {
 } from "@/lib/market-view";
 import { CATEGORIES, CATEGORY_IDS, type CategoryId } from "@/shared/categories";
 import { SearchIcon, StarIcon } from "../ui/icons";
+import { Tabs, type TabOption } from "../ui/tabs";
 
 export type CategoryFilter = CategoryId | "all";
 
@@ -31,9 +32,9 @@ const SORT_LABELS: Record<SortKey, string> = {
   name: "Name",
 };
 
-const CATEGORY_OPTIONS: { value: CategoryFilter; label: string; title?: string }[] = [
+const CATEGORY_OPTIONS: TabOption<CategoryFilter>[] = [
   { value: "all", label: "All" },
-  ...CATEGORY_IDS.map((id) => ({ value: id, label: id, title: CATEGORIES[id].name })),
+  ...CATEGORY_IDS.map((id) => ({ value: id, label: id, description: CATEGORIES[id].name })),
 ];
 
 export function Toolbar(props: ToolbarProps) {
@@ -59,27 +60,12 @@ export function Toolbar(props: ToolbarProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <fieldset className="flex rounded-lg border border-border bg-surface p-0.5">
-          <legend className="sr-only">Category</legend>
-          {CATEGORY_OPTIONS.map((option) => (
-            <label
-              key={option.value}
-              title={option.title}
-              className="cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted has-checked:bg-surface-muted has-checked:font-medium has-checked:text-fg has-focus-visible:outline-2 has-focus-visible:outline-focus"
-            >
-              <input
-                type="radio"
-                name="category"
-                value={option.value}
-                checked={props.category === option.value}
-                onChange={() => props.onCategoryChange(option.value)}
-                className="sr-only"
-              />
-              {option.label}
-              {option.title && <span className="sr-only">: {option.title}</span>}
-            </label>
-          ))}
-        </fieldset>
+        <Tabs
+          label="Category"
+          options={CATEGORY_OPTIONS}
+          value={props.category}
+          onChange={props.onCategoryChange}
+        />
 
         <button
           type="button"
