@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Crypto Markets Dashboard
 
-## Getting Started
+A dashboard of the top 50 cryptocurrencies by market capitalisation. Prices update automatically and the page states clearly how fresh they are. It is built with Next.js 16, React 19 and TypeScript, using market data from the [CoinGecko API](https://www.coingecko.com/en/api).
 
-First, run the development server:
+- The top 50 assets, grouped into three categories (A, B and C), showing price, 24h change, volume and market cap.
+- Automatic refresh with a **Live / Delayed / Stale** status. Users are always told how old the data is and why.
+- Accurate formatting for very small prices and missing data, plus per-asset brand colours.
+- Search, category filter, sorting, a persistent watchlist, and asset pages with an interactive 7-day chart.
+- Responsive and accessible: keyboard-operable controls, sort state exposed to screen readers, live regions that don't spam, and light and dark themes.
+
+Design decisions, caching strategy and API quota calculations are in [DECISIONS.md](DECISIONS.md).
+
+## Quick start
+
+You need Node.js 20.19 or later, and pnpm (`corepack enable` provides it).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local   # optionally add your CoinGecko Demo key
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app runs without an API key, using CoinGecko's keyless public API with lower rate limits. For realistic limits, create a free Demo key at the [CoinGecko developer dashboard](https://www.coingecko.com/en/developers/dashboard).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Configuration
 
-## Learn More
+| Variable                           | Default   | Description                                                                                                                                 |
+| ---------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COINGECKO_API_KEY`                | _(empty)_ | CoinGecko Demo API key. It is read on the server only and never sent to the browser.                                                        |
+| `MARKETS_REFRESH_INTERVAL_SECONDS` | `300`     | How long a snapshot is served before refreshing (60 to 3600). The server warns at startup if the value could exceed the monthly Demo quota. |
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command                                              | What it does                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| `pnpm dev`                                           | Start the development server                                              |
+| `pnpm build && pnpm start`                           | Production build and server                                               |
+| `pnpm test`                                          | Run all tests once (`pnpm test:watch` to watch)                           |
+| `pnpm lint` / `pnpm typecheck` / `pnpm format:check` | Static checks                                                             |
+| `pnpm verify`                                        | Run every check above                                                     |
+| `pnpm check:metadata`                                | List top-50 assets missing a curated category or colour (uses 1 API call) |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The tests make no network calls: the upstream API is mocked with [MSW](https://mswjs.io).
 
-## Deploy on Vercel
+## How it works
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+Browser ──poll every 30s──▶ /api/markets ─┐
+                                          ├─▶ in-process SWR cache ──≤1 call / 5 min──▶ CoinGecko
+Browser ──────────────────▶ /api/coins/:id┘     (shared by all users)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+  app/                 Pages and route handlers (thin: they delegate to src/server)
+  server/              Server only: CoinGecko client, schema validation, SWR cache, metadata join
+  shared/              Wire types, categories, curated asset metadata
+  lib/                 Pure logic: formatting, freshness, sorting and aggregates, colour contrast
+  hooks/               Polling queries, watchlist storage, shared clock
+  components/          UI, split into dashboard, coin detail, freshness and primitives
+```
+
+## Known limitations
+
+- **The cache is per process.** Quota calculations assume one long-lived server. Running several instances, or serverless functions, multiplies upstream calls. See "First production improvements" in [DECISIONS.md](DECISIONS.md).
+- **Restarts empty the cache,** and each restart costs one upstream call.
+- **USD only.** The reasons are in [DECISIONS.md](DECISIONS.md).
+- **Chart times are approximate.** The 7-day chart uses CoinGecko's sparkline, which has hourly points but no timestamps.
+- **The watchlist is per browser** (`localStorage`). There are no accounts.
+- **Metadata is curated by hand.** A new top-50 asset falls back to category C and a neutral colour until it is added.
+- **Unknown asset pages return HTTP 200, not 404.** The prerendered shell streams before the asset is resolved. The page still shows "Not found" and is marked `noindex`. The JSON API returns a proper 404.
