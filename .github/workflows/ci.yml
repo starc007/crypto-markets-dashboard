@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # The oldest supported version (package.json engines) and the current one.
-        node: ["22.13", "24"]
+        # The oldest supported version (package.json engines; jsdom sets the floor) and the current one.
+        node: ["22.22.2", "24"]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
