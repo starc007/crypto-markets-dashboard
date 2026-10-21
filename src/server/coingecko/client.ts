@@ -1,0 +1,71 @@
+import "server-only";
+import { UpstreamError, parseRetryAfter } from "./errors";
+import { parseMarkets, type ParsedMarkets } from "./schema";
+
+export const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
+export const TOP_N = 50;
+const REQUEST_TIMEOUT_MS = 10_000;
+
+/**
+ * The only upstream request this application makes. Parameters are fixed
+ * server-side: nothing from the incoming request is forwarded, so our API
+ * cannot be used as a general-purpose CoinGecko proxy.
+ *
+ * `sparkline=true` returns 7 days of hourly prices for every asset in the same
+ * call, which powers the detail charts without spending extra quota.
+ */
+export function buildMarketsUrl(): URL {
+  const url = new URL(`${COINGECKO_BASE_URL}/coins/markets`);
+  url.search = new URLSearchParams({
+    vs_currency: "usd",
+    order: "market_cap_desc",
+    per_page: String(TOP_N),
+    page: "1",
+    sparkline: "true",
+    price_change_percentage: "24h",
+    precision: "full",
+  }).toString();
+  return url;
+}
+
+export async function fetchTopMarkets(apiKey: string | undefined): Promise<ParsedMarkets> {
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (apiKey) headers["x-cg-demo-api-key"] = apiKey;
+
+  const response = await fetch(buildMarketsUrl(), {
+    headers,
+    // Our own cache decides freshness; never let the framework layer another one on top.
+    cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (!response.ok) throw errorForStatus(response);
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (cause) {
+    throw new UpstreamError("INVALID_RESPONSE", "CoinGecko returned invalid JSON", { cause });
+  }
+
+  const parsed = parseMarkets(payload);
+  if (!parsed || parsed.quotes.length === 0) {
+    // An empty or malformed payload must not replace a good snapshot.
+    throw new UpstreamError("INVALID_RESPONSE", "CoinGecko returned no usable market data");
+  }
+  return parsed;
+}
+
+function errorForStatus(response: Response): UpstreamError {
+  const { status } = response;
+  if (status === 429) {
+    return new UpstreamError("RATE_LIMITED", "CoinGecko rate limit or monthly quota reached", {
+      status,
+      retryAfterMs: parseRetryAfter(response.headers.get("retry-after")),
+    });
+  }
+  if (status === 401 || status === 403) {
+    return new UpstreamError("UNAUTHORIZED", "CoinGecko rejected the API key", { status });
+  }
+  return new UpstreamError("UNAVAILABLE", `CoinGecko responded with HTTP ${status}`, { status });
+}
