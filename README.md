@@ -79,7 +79,7 @@ scripts/               check-metadata.ts (lists top-50 assets missing curated me
 
 - **The cache is per process.** Quota calculations assume one long-lived server. Running several instances, or serverless functions, multiplies upstream calls. [DEPLOYMENT.md](DEPLOYMENT.md) covers what changes for Vercel and Cloudflare.
 - **Restarts empty the caches,** and each restart costs two upstream calls.
-- **EUR and GBP values are converted from USD** at rates up to 2 hours old, and the 7-day chart uses today's rate. Details are in [DECISIONS.md](DECISIONS.md).
+- **EUR and GBP values are converted from USD** at rates normally up to 2 hours old (rates older than 6 hours are withheld), and the 7-day chart uses today's rate. Details are in [DECISIONS.md](DECISIONS.md).
 - **Chart times are approximate.** The 7-day chart uses CoinGecko's sparkline, which has hourly points but no timestamps.
 - **The watchlist is per browser** (`localStorage`). There are no accounts.
 - **Metadata is curated by hand.** A new top-50 asset falls back to category C and a neutral colour until it is added.

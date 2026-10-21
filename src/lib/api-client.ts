@@ -24,7 +24,11 @@ function isApiErrorBody(body: unknown): body is ApiErrorBody {
   );
 }
 
-export async function fetchFromApi<T>(path: string, signal?: AbortSignal): Promise<Received<T>> {
+export async function fetchFromApi<T>(
+  path: string,
+  isExpected: (body: unknown) => body is T,
+  signal?: AbortSignal,
+): Promise<Received<T>> {
   let response: Response;
   try {
     response = await fetch(path, { signal, headers: { accept: "application/json" } });
@@ -41,6 +45,8 @@ export async function fetchFromApi<T>(path: string, signal?: AbortSignal): Promi
     }
     throw new ApiError(response.status, "INTERNAL", `Request failed with HTTP ${response.status}.`);
   }
-  if (body === null) throw new ApiError(response.status, "INTERNAL", "Invalid server response.");
-  return { ...(body as T), receivedAt: Date.now() };
+  if (!isExpected(body)) {
+    throw new ApiError(response.status, "INTERNAL", "Unexpected response from the server.");
+  }
+  return { ...body, receivedAt: Date.now() };
 }

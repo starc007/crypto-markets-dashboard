@@ -1,9 +1,10 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { ApiError, fetchFromApi, type Received } from "@/lib/api-client";
-import { keepNewestSnapshot } from "@/lib/snapshot-order";
+import { isHistoryResponse, isMarketsResponse } from "@/lib/api-guards";
+import { keepNewestSnapshot, reconcileHistory } from "@/lib/snapshot-order";
 import type { CoinHistoryResponse, MarketsResponse } from "@/shared/market";
 
 /**
@@ -16,7 +17,7 @@ export const POLL_INTERVAL_MS = 30_000;
 const marketsQuery = {
   queryKey: ["markets"],
   queryFn: ({ signal }: { signal: AbortSignal }) =>
-    fetchFromApi<MarketsResponse>("/api/markets", signal),
+    fetchFromApi("/api/markets", isMarketsResponse, signal),
   // Never let a response from an older snapshot replace a newer one on screen.
   structuralSharing: keepNewestSnapshot,
 } as const;
@@ -56,28 +57,61 @@ export function useMarketsSnapshot(enabled = true) {
   return useQuery({ ...marketsQuery, enabled, staleTime: POLL_INTERVAL_MS });
 }
 
-export function historyQuery(id: string, fetchedAt: string | undefined) {
+/**
+ * History for one asset, keyed by asset only so the query (and the chart on
+ * screen) survives snapshot changes. `useHistorySync` keeps it matched to the
+ * markets snapshot.
+ */
+export function historyQuery(id: string, enabled = true) {
   return {
-    // Keyed by snapshot: a new snapshot fetches matching history, and history never mixes snapshots.
-    queryKey: ["history", id, fetchedAt],
+    queryKey: ["history", id],
     queryFn: ({ signal }: { signal: AbortSignal }) =>
-      fetchFromApi<CoinHistoryResponse>(`/api/coins/${encodeURIComponent(id)}/history`, signal),
-    enabled: fetchedAt !== undefined,
+      fetchFromApi(`/api/coins/${encodeURIComponent(id)}/history`, isHistoryResponse, signal),
+    enabled,
     staleTime: Infinity,
     retry: 1,
-    // Keep showing the previous chart while the next snapshot's history loads.
-    placeholderData: keepPreviousData,
   };
+}
+
+/**
+ * Keeps histories on the same snapshot as the markets data on screen:
+ * history from an older snapshot is refetched, and history from a newer one
+ * means markets is behind, so markets is refetched instead.
+ */
+export function useHistorySync(
+  histories: readonly { fetchedAt: string | undefined; refetch: () => unknown }[],
+  marketsFetchedAt: string | undefined,
+) {
+  const queryClient = useQueryClient();
+  const signature = histories.map((h) => h.fetchedAt ?? "").join("|");
+
+  useEffect(() => {
+    if (!marketsFetchedAt) return;
+    let marketsBehind = false;
+    for (const history of histories) {
+      if (!history.fetchedAt) continue;
+      const sync = reconcileHistory(history.fetchedAt, marketsFetchedAt);
+      if (sync === "refetch-history") void history.refetch();
+      if (sync === "refetch-markets") marketsBehind = true;
+    }
+    if (marketsBehind) void queryClient.invalidateQueries({ queryKey: marketsQuery.queryKey });
+    // `signature` captures the histories' snapshots; the array itself is new every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, marketsFetchedAt, queryClient]);
 }
 
 export function useCoinHistory(
   id: string,
-  fetchedAt: string | undefined,
+  marketsFetchedAt: string | undefined,
   initialData: CoinHistoryResponse | null,
 ) {
-  const initial = useReceivedInitialData(initialData);
-  return useQuery({
-    ...historyQuery(id, fetchedAt),
-    initialData: initial?.fetchedAt === fetchedAt ? initial : undefined,
+  const history = useQuery({
+    ...historyQuery(id, marketsFetchedAt !== undefined),
+    initialData: useReceivedInitialData(initialData),
   });
+  useHistorySync(
+    [{ fetchedAt: history.data?.fetchedAt, refetch: history.refetch }],
+    marketsFetchedAt,
+  );
+  return history;
 }

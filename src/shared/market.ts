@@ -73,7 +73,10 @@ export interface MarketsResponse {
  */
 export interface CoinHistoryResponse {
   id: string;
-  /** The snapshot this history belongs to; matches `MarketsResponse.meta.fetchedAt`. */
+  /**
+   * The snapshot this history belongs to. Clients compare it with
+   * `MarketsResponse.meta.fetchedAt` and refetch whichever side is behind.
+   */
   fetchedAt: string;
   /** Roughly hourly USD prices for the last 7 days, oldest first. */
   prices: number[] | null;

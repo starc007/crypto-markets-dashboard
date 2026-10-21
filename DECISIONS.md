@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Next.js on one long-lived Node process acts as both UI and backend-for-frontend. The **server** owns the CoinGecko key, two fixed upstream requests, the caches, validation and the metadata join. The **browser** never calls CoinGecko: it polls `GET /api/markets`, the **single source of prices** on every page (charts fetch history keyed to the same snapshot), and owns view state (search, sort, filters, watchlist, currency). Pages are server-rendered with the cached snapshot, so data shows before JavaScript loads.
+Next.js on one long-lived Node process acts as both UI and backend-for-frontend. The **server** owns the CoinGecko key, two fixed upstream requests, the caches, validation and the metadata join. The **browser** never calls CoinGecko: it polls `GET /api/markets`, the **single source of prices** on every page (chart history is checked against that snapshot and refetched when they differ), and owns view state (search, sort, filters, watchlist, currency). Pages are server-rendered with the cached snapshot, so data shows before JavaScript loads.
 
 The API can't act as a proxy. It ignores request input, its upstream parameters are fixed in code, and it serves only ids already in the cached top 50.
 
@@ -18,10 +18,10 @@ Both are product decisions, so they live in a typed module ([`asset-metadata.ts`
 ## Fetching, caching and freshness
 
 - **Markets:** one call, `/coins/markets?per_page=50&sparkline=true`, also returns the 7-day series for the charts, at no extra quota.
-- **Rates:** `/simple/price` for Bitcoin in USD, EUR and GBP, refreshed every 2 hours, gives exchange rates and their own 24h move. EUR and GBP 24h changes are restated as `(1 + changeUsd) × (1 + rateChange) − 1`, never reused from USD.
+- **Rates:** `/simple/price` for Bitcoin in USD, EUR and GBP, refreshed every 2 hours, gives exchange rates and their own 24h move. Each currency stands alone, and rates older than 6 hours are withheld, so EUR/GBP fall back to USD with a notice. EUR and GBP 24h changes are restated as `(1 + changeUsd) × (1 + rateChange) − 1`, never reused from USD.
 - **Cache:** an in-process stale-while-revalidate cache.
   - Data is served from memory for 5 minutes. After that, the next request triggers a single background refresh that all callers share.
-  - Failures keep the last good data and back off from 15 s up to 5 min, honouring `Retry-After`.
+  - Failures keep the last good data and back off from 15 s up to the cache's own interval (5 min for markets, 2 h for rates), honouring `Retry-After`.
   - On a cold start during an outage, requests get a 503 without calling upstream again.
   - Past 3 intervals old, a request waits up to 3 s for fresh data rather than serving stale data.
   - A snapshot with under 90% of assets priced is rejected, so a systemic upstream change can't hide behind a page of dashes.
@@ -40,7 +40,7 @@ Upstream calls scale with time, not users: each server process makes at most one
 | Per minute                                         | steady state / worst burst | ~0.21 / ≤ 6, against a limit of 100 |
 | Our server                                         | 500 users / 30 s poll      | ~17 req/s, served from memory       |
 
-The **monthly quota** is the binding limit. A 4-minute refresh (11,160) or native EUR/GBP markets (×3) would exceed it. The server warns at startup if its configuration could. When the quota is exhausted, retries continue every 5 minutes; failed calls use no credits. Users see the cause and the data's age.
+The **monthly quota** is the binding limit. A 4-minute refresh (11,160) or native EUR/GBP markets (×3) would exceed it. The server warns at startup if its configuration could. 429s and 5xx use no credits, but a 200 whose body fails validation does, which is why retries never run faster than the normal interval: a failure can't cost more than normal operation. The 700-call headroom covers restarts (2 calls each) and `check:metadata`; local development should use its own key. Users always see the cause and the data's age.
 
 ## Correctness, failures and testing
 

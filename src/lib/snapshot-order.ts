@@ -30,3 +30,18 @@ export function keepNewestSnapshot(previous: unknown, next: unknown): unknown {
   }
   return replaceEqualDeep(previous, next);
 }
+
+export type HistorySync = "in-sync" | "refetch-history" | "refetch-markets";
+
+/**
+ * What to do when an asset's history and the markets snapshot on screen come
+ * from different snapshots. History is fetched separately, so the server can
+ * refresh in between: older history is refetched; newer history means the
+ * client's markets data is behind, so that is refetched instead.
+ */
+export function reconcileHistory(historyFetchedAt: string, marketsFetchedAt: string): HistorySync {
+  const history = Date.parse(historyFetchedAt);
+  const markets = Date.parse(marketsFetchedAt);
+  if (history === markets) return "in-sync";
+  return history < markets ? "refetch-history" : "refetch-markets";
+}

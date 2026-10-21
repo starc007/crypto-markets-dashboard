@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useFreshness, type ConnectionState } from "@/hooks/use-freshness";
-import { historyQuery, useMarkets } from "@/hooks/use-market-data";
+import { historyQuery, useHistorySync, useMarkets } from "@/hooks/use-market-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import type { Received } from "@/lib/api-client";
 import { alignPerformance } from "@/lib/performance";
@@ -28,9 +28,10 @@ type HistoryResult = UseQueryResult<Received<CoinHistoryResponse>>;
 function combineHistories(results: HistoryResult[]) {
   return {
     data: results.every((r) => r.data) ? results.map((r): CoinHistoryResponse => r.data!) : null,
-    // With previous data kept as a placeholder, only a failure with nothing to show counts.
+    // A refetch that fails while older data is shown isn't a failure worth a blank state.
     isError: results.some((r) => r.isError && !r.data),
     refetch: () => results.forEach((r) => void r.refetch()),
+    sync: results.map((r) => ({ fetchedAt: r.data?.fetchedAt, refetch: r.refetch })),
   };
 }
 
@@ -44,7 +45,8 @@ function describeSpan(hours: number): string {
  * Compares up to five assets' 7-day performance. The selection lives in the
  * URL (`/compare?ids=bitcoin,ethereum`), so a comparison can be shared. Prices
  * come from the same polled snapshot as every other page, and hourly histories
- * are keyed to that snapshot, so comparing costs no upstream quota.
+ * are reconciled with that snapshot. All of it is served from cache, so
+ * comparing costs no upstream quota.
  */
 export function CompareView({
   initialIds,
@@ -79,9 +81,10 @@ export function CompareView({
 
   const fetchedAt = data?.meta.fetchedAt;
   const histories = useQueries({
-    queries: ids.map((id) => historyQuery(id, fetchedAt)),
+    queries: ids.map((id) => historyQuery(id, fetchedAt !== undefined)),
     combine: combineHistories,
   });
+  useHistorySync(histories.sync, fetchedAt);
 
   const compared = useMemo(() => {
     if (!histories.data || fetchedAt === undefined) return null;
@@ -100,6 +103,11 @@ export function CompareView({
     const missing = histories.data.length - withHistory.length;
     return { lines, spanHours, missing, endTime: Date.parse(fetchedAt) };
   }, [histories.data, byId, fetchedAt]);
+
+  // While a newly added asset's history loads, keep the previous chart rather than blanking it.
+  const [shown, setShown] = useState(compared);
+  if (compared && compared !== shown) setShown(compared);
+  const chartData = compared ?? shown;
 
   if (!data) {
     return isError ? (
@@ -134,19 +142,19 @@ export function CompareView({
               Try again
             </button>
           </div>
-        ) : !compared ? (
+        ) : !chartData ? (
           <div aria-busy="true" className="h-80 animate-pulse rounded-lg bg-surface-muted" />
-        ) : compared.lines.length < 2 ? (
+        ) : chartData.lines.length < 2 ? (
           <p className="py-16 text-center text-sm text-muted">
             Not enough price history to compare these assets.
           </p>
         ) : (
           <>
-            <CompareChart series={compared.lines} endTime={compared.endTime} />
+            <CompareChart series={chartData.lines} endTime={chartData.endTime} />
             <p className="mt-3 text-xs text-muted">
-              Compared over {describeSpan(compared.spanHours)}. Performance is measured in USD.
-              {compared.missing > 0 &&
-                ` ${compared.missing} ${compared.missing === 1 ? "asset has" : "assets have"} no history and ${compared.missing === 1 ? "is" : "are"} left out.`}
+              Compared over {describeSpan(chartData.spanHours)}. Performance is measured in USD.
+              {chartData.missing > 0 &&
+                ` ${chartData.missing} ${chartData.missing === 1 ? "asset has" : "assets have"} no history and ${chartData.missing === 1 ? "is" : "are"} left out.`}
             </p>
           </>
         )

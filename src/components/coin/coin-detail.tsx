@@ -83,6 +83,7 @@ export function CoinDetail({
           marketCoin={coin}
           history={history.data?.prices ?? null}
           historyLoading={history.isPending}
+          onRetryHistory={history.isError && !history.data ? () => void history.refetch() : null}
           initialCurrency={initialCurrency}
           connection={{ error: isError ? error : null, offline: fetchStatus === "paused" }}
         />
@@ -96,6 +97,7 @@ function CoinDetailView({
   marketCoin,
   history,
   historyLoading,
+  onRetryHistory,
   initialCurrency,
   connection,
 }: {
@@ -103,6 +105,8 @@ function CoinDetailView({
   marketCoin: MarketCoin;
   history: number[] | null;
   historyLoading: boolean;
+  /** Set when history failed to load, so the chart area can offer a retry. */
+  onRetryHistory: (() => void) | null;
   initialCurrency: Currency;
   connection: ConnectionState;
 }) {
@@ -228,6 +232,17 @@ function CoinDetailView({
             endTime={Date.parse(meta.fetchedAt)}
             assetName={coin.name}
           />
+        ) : onRetryHistory ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted">
+            <p>We couldn&apos;t load the 7-day history.</p>
+            <button
+              type="button"
+              onClick={onRetryHistory}
+              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-fg shadow-card transition-colors hover:bg-surface-muted"
+            >
+              Try again
+            </button>
+          </div>
         ) : historyLoading ? (
           <div aria-busy="true" className="h-64 animate-pulse rounded-lg bg-surface-muted" />
         ) : (
