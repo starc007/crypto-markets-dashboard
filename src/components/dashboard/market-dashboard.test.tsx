@@ -16,6 +16,11 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
+// These tests cover data and filtering, not motion: exits unmount immediately here.
+vi.mock("motion/react", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("motion/react")>()),
+  AnimatePresence: ({ children }: { children: ReactNode }) => children,
+}));
 vi.mock("next/image", () => ({
   // eslint-disable-next-line @next/next/no-img-element
   default: (props: { src: string; alt: string }) => <img src={props.src} alt={props.alt} />,

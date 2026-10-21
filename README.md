@@ -8,7 +8,8 @@ A dashboard of the top 50 cryptocurrencies by market capitalisation. Prices upda
 - USD, EUR and GBP, with 24h changes correctly restated in each currency and the conversion rate always shown.
 - Search, category filter, sorting, a persistent watchlist, and asset pages with an interactive 7-day chart.
 - Animated segmented tabs (built with [Motion](https://motion.dev)) that are a native radio group underneath, and that respect reduced motion.
-- Responsive and accessible: keyboard-operable controls, sort state exposed to screen readers, live regions that don't spam, and light and dark themes.
+- Purposeful motion: prices flash green or red when they change, rows glide when re-sorted, and charts draw in. All of it respects reduced motion.
+- Responsive and accessible: keyboard-operable controls, sort state exposed to screen readers, and live regions that don't spam.
 
 Design decisions, caching strategy and API quota calculations are in [DECISIONS.md](DECISIONS.md).
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useCurrencyPreference, useDisplayCurrency } from "@/hooks/use-currency";
 import { useMarkets } from "@/hooks/use-market-data";
@@ -125,7 +126,12 @@ function MarketsView({
       </p>
 
       {visibleCount === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          className="rounded-2xl border border-dashed border-border bg-surface/60 px-6 py-12 text-center"
+        >
           <p className="font-medium">
             {watchlistOnly && watchlist.size === 0
               ? "Your watchlist is empty."
@@ -139,35 +145,38 @@ function MarketsView({
           <button
             type="button"
             onClick={clearFilters}
-            className="mt-4 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm hover:bg-surface-muted"
+            className="mt-4 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm shadow-card transition-colors hover:bg-surface-muted"
           >
             Clear filters
           </button>
-        </div>
+        </motion.div>
       ) : (
-        CATEGORY_IDS.filter((id) => visibleGroups[id].length > 0).map((id) => (
-          <CategorySection
-            key={id}
-            category={CATEGORIES[id]}
-            summary={summarizeCategory(groups[id])}
-            currency={currency}
-            visibleCount={visibleGroups[id].length}
-          >
-            {(headingId) => (
-              <MarketTable
-                coins={visibleGroups[id]}
-                currency={currency}
-                labelledBy={headingId}
-                sort={sort}
-                onSort={handleSort}
-                fetchedAt={data.meta.fetchedAt}
-                isStale={freshness.freshness === "stale"}
-                watchlist={watchlist}
-                onToggleWatch={toggle}
-              />
-            )}
-          </CategorySection>
-        ))
+        <AnimatePresence initial={false}>
+          {CATEGORY_IDS.filter((id) => visibleGroups[id].length > 0).map((id, index) => (
+            <CategorySection
+              key={id}
+              index={index}
+              category={CATEGORIES[id]}
+              summary={summarizeCategory(groups[id])}
+              currency={currency}
+              visibleCount={visibleGroups[id].length}
+            >
+              {(headingId) => (
+                <MarketTable
+                  coins={visibleGroups[id]}
+                  currency={currency}
+                  labelledBy={headingId}
+                  sort={sort}
+                  onSort={handleSort}
+                  fetchedAt={data.meta.fetchedAt}
+                  isStale={freshness.freshness === "stale"}
+                  watchlist={watchlist}
+                  onToggleWatch={toggle}
+                />
+              )}
+            </CategorySection>
+          ))}
+        </AnimatePresence>
       )}
       <p className="text-xs text-muted">Market data from CoinGecko.</p>
     </div>

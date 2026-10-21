@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "motion/react";
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { formatPercentChange, formatPrice } from "@/lib/format";
 import type { Currency } from "@/shared/currency";
@@ -8,6 +9,8 @@ const WIDTH = 640;
 const HEIGHT = 220;
 const PADDING_Y = 12;
 const HOUR_MS = 60 * 60_000;
+/** Fast enough to track the pointer, soft enough to read as motion rather than jitter. */
+const FOLLOW = { type: "spring", stiffness: 700, damping: 45, mass: 0.6 } as const;
 
 interface PriceChartProps {
   prices: readonly number[];
@@ -31,6 +34,7 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
 export function PriceChart({ prices, currency, endTime, assetName }: PriceChartProps) {
   const money = (value: number) => formatPrice(value, currency);
   const gradientId = useId();
+  const clipId = useId();
   const readoutId = useId();
   const [active, setActive] = useState<number | null>(null);
 
@@ -83,6 +87,13 @@ export function PriceChart({ prices, currency, endTime, assetName }: PriceChartP
   }
 
   const activePrice = active === null ? null : prices[active]!;
+  const dotPosition =
+    active === null || activePrice === null
+      ? { left: "0%", top: "0%" }
+      : {
+          left: `${(geometry.x(active) / WIDTH) * 100}%`,
+          top: `${(geometry.y(activePrice) / HEIGHT) * 100}%`,
+        };
 
   return (
     <figure className="flex flex-col gap-2">
@@ -124,20 +135,34 @@ export function PriceChart({ prices, currency, endTime, assetName }: PriceChartP
               <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
               <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
             </linearGradient>
+            {/* Reveals the series left to right, like time passing; a clip keeps the stroke crisp. */}
+            <clipPath id={clipId}>
+              <motion.rect
+                x={0}
+                y={0}
+                height={HEIGHT}
+                initial={{ width: 0 }}
+                animate={{ width: WIDTH }}
+                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+              />
+            </clipPath>
           </defs>
-          <path d={geometry.area} fill={`url(#${gradientId})`} />
-          <path
-            d={geometry.line}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth={2}
-            vectorEffect="non-scaling-stroke"
-            strokeLinejoin="round"
-          />
+          <g clipPath={`url(#${clipId})`}>
+            <path d={geometry.area} fill={`url(#${gradientId})`} />
+            <path
+              d={geometry.line}
+              fill="none"
+              stroke="var(--accent)"
+              strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round"
+            />
+          </g>
           {active !== null && activePrice !== null && (
-            <line
-              x1={geometry.x(active)}
-              x2={geometry.x(active)}
+            <motion.line
+              initial={false}
+              animate={{ x1: geometry.x(active), x2: geometry.x(active) }}
+              transition={FOLLOW}
               y1={0}
               y2={HEIGHT}
               stroke="var(--text-muted)"
@@ -147,13 +172,12 @@ export function PriceChart({ prices, currency, endTime, assetName }: PriceChartP
           )}
         </svg>
         {active !== null && activePrice !== null && (
-          <span
+          <motion.span
             aria-hidden="true"
-            className="pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent"
-            style={{
-              left: `${(geometry.x(active) / WIDTH) * 100}%`,
-              top: `${(geometry.y(activePrice) / HEIGHT) * 100}%`,
-            }}
+            className="pointer-events-none absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent shadow-card"
+            initial={{ scale: 0, left: dotPosition.left, top: dotPosition.top }}
+            animate={{ scale: 1, ...dotPosition }}
+            transition={{ ...FOLLOW, scale: { duration: 0.15 } }}
           />
         )}
       </div>

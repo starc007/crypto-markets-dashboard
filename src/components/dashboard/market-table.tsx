@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import type { DisplayCoin } from "@/lib/currency-conversion";
 import {
@@ -12,6 +13,7 @@ import { quoteLagMs } from "@/lib/freshness";
 import type { SortKey, SortState } from "@/lib/market-view";
 import type { Currency } from "@/shared/currency";
 import { AssetAvatar } from "../ui/asset-avatar";
+import { FlashOnChange } from "../ui/flash-on-change";
 import { ArrowDownIcon, ArrowUpIcon, ClockIcon, SortIcon } from "../ui/icons";
 import { PriceChange } from "../ui/price-change";
 import { WatchToggle } from "../ui/watch-toggle";
@@ -108,17 +110,20 @@ export function MarketTable({
           </tr>
         </thead>
         <tbody>
-          {coins.map((coin) => (
-            <MarketRow
-              key={coin.id}
-              coin={coin}
-              currency={currency}
-              fetchedAt={fetchedAt}
-              isStale={isStale}
-              watched={watchlist.has(coin.id)}
-              onToggleWatch={onToggleWatch}
-            />
-          ))}
+          {/* Rows glide to their new position when sorting or new data reorders them. */}
+          <AnimatePresence initial={false}>
+            {coins.map((coin) => (
+              <MarketRow
+                key={coin.id}
+                coin={coin}
+                currency={currency}
+                fetchedAt={fetchedAt}
+                isStale={isStale}
+                watched={watchlist.has(coin.id)}
+                onToggleWatch={onToggleWatch}
+              />
+            ))}
+          </AnimatePresence>
         </tbody>
       </table>
     </div>
@@ -144,7 +149,14 @@ function MarketRow({
   const valueTone = isStale ? "text-muted" : "";
 
   return (
-    <tr className="group relative border-b border-border last:border-b-0 hover:bg-surface-muted">
+    <motion.tr
+      layout="position"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.12 } }}
+      transition={{ layout: { type: "spring", stiffness: 550, damping: 45 }, duration: 0.2 }}
+      className="group relative border-b border-border transition-colors last:border-b-0 hover:bg-surface-muted"
+    >
       <td className="relative z-10 py-2.5 pl-1 sm:px-2">
         <WatchToggle
           assetName={coin.name}
@@ -183,9 +195,11 @@ function MarketRow({
               <span className="sr-only">Price may be outdated.</span>
             </span>
           )}
-          <span title={formatFullCurrency(coin.price, currency)}>
-            {formatPrice(coin.price, currency)}
-          </span>
+          <FlashOnChange value={coin.price} resetKey={currency}>
+            <span title={formatFullCurrency(coin.price, currency)}>
+              {formatPrice(coin.price, currency)}
+            </span>
+          </FlashOnChange>
         </span>
         {/* Small screens show the 24h change under the price instead of in its own column. */}
         <div className="text-xs font-normal sm:hidden">
@@ -207,6 +221,6 @@ function MarketRow({
       >
         {formatCompactCurrency(coin.marketCap, currency)}
       </td>
-    </tr>
+    </motion.tr>
   );
 }

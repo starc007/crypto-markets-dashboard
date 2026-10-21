@@ -16,7 +16,7 @@ Categories and brand colours are product decisions, not market data. They live i
 
 - **Change process:** entries change through review, like code. A database or CMS would add a runtime dependency, and an admin UI, for roughly 50 rows that change a few times a year.
 - **Provenance:** each colour records its source. `brand` means a published brand colour; `logo` means sampled from the official logo when no brand colour is published.
-- **Contrast:** brand colours aren't designed for our backgrounds. XRP is near black and Hyperliquid is pale mint, so the server derives per-theme accents that reach WCAG's 3:1 ratio for graphics. Accents are used for rings and chart lines, never for text.
+- **Contrast:** brand colours aren't designed for our background. Hyperliquid is pale mint and Canton is pale yellow, so the server derives a display accent that reaches WCAG's 3:1 ratio for graphics. Accents are used for rings and chart lines, never for text.
 - **Joining:** the join happens on every read, not when data is cached. Changing a colour never requires refetching prices.
 - **Unknown assets:** a coin that newly enters the top 50 lands in category C with a neutral grey, never a guessed colour. The server logs a warning, and `pnpm check:metadata` lists missing and departed entries, exiting non-zero so it can gate CI.
 
@@ -114,7 +114,7 @@ The tests (Vitest) focus on where bugs would cost money:
 
 1. **Shared cache and single poller.** The cache is per process, so N instances or serverless functions multiply upstream usage by N. Move snapshots to Redis behind one scheduled poller, or a distributed lock, and keep the freshness metadata.
 2. **Observability.** Add metrics and alerts for refresh failures, snapshot age and monthly quota burn (CoinGecko's `/key` endpoint), plus a run of `check:metadata` in CI.
-3. **End-to-end tests** (Playwright) for the stale and outage paths, and visual checks of both themes.
+3. **End-to-end tests** (Playwright) for the stale and outage paths, and visual regression checks.
 4. **Pacing by remaining quota:** spend quota saved during quiet hours on faster refreshes at peak times.
 
 ## AI tools

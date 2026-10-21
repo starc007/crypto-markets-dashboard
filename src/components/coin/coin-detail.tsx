@@ -24,6 +24,7 @@ import type { CoinDetailResponse } from "@/shared/market";
 import { ConversionNote, CurrencySwitcher } from "../currency/currency-switcher";
 import { FreshnessBanner, FreshnessIndicator, useFreshness } from "../freshness/freshness";
 import { AssetAvatar } from "../ui/asset-avatar";
+import { FlashOnChange } from "../ui/flash-on-change";
 import { ErrorState } from "../ui/error-state";
 import { ChevronLeftIcon } from "../ui/icons";
 import { PriceChange } from "../ui/price-change";
@@ -140,7 +141,7 @@ function CoinDetailView({
 
   return (
     <article
-      className="asset-accent flex flex-col gap-6"
+      className="animate-enter flex flex-col gap-6"
       style={accentVars(coin.accent) as CSSProperties}
       aria-labelledby="coin-title"
     >
@@ -181,7 +182,9 @@ function CoinDetailView({
             className={`text-4xl font-semibold tracking-tight tabular-nums ${isStale ? "text-muted" : ""}`}
             title={formatFullCurrency(coin.price, currency)}
           >
-            {formatPrice(coin.price, currency)}
+            <FlashOnChange value={coin.price} resetKey={currency}>
+              {formatPrice(coin.price, currency)}
+            </FlashOnChange>
           </p>
           <PriceChange value={coin.change24hPct} className="text-lg" />
           <span className="text-sm text-muted">24h</span>
@@ -195,7 +198,7 @@ function CoinDetailView({
         )}
       </div>
 
-      <section className="rounded-xl border border-border bg-surface p-4">
+      <section className="rounded-2xl border border-border bg-surface p-4 shadow-card">
         {sparkline7d ? (
           <PriceChart
             prices={sparkline7d}
@@ -208,7 +211,7 @@ function CoinDetailView({
         )}
       </section>
 
-      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border shadow-card sm:grid-cols-3">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-surface px-4 py-3">
             <dt className="text-xs text-muted">{stat.label}</dt>
