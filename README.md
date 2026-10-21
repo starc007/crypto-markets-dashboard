@@ -5,7 +5,9 @@ A dashboard of the top 50 cryptocurrencies by market capitalisation. Prices upda
 - The top 50 assets, grouped into three categories (A, B and C), showing price, 24h change, volume and market cap.
 - Automatic refresh with a **Live / Delayed / Stale** status. Users are always told how old the data is and why.
 - Accurate formatting for very small prices and missing data, plus per-asset brand colours.
+- USD, EUR and GBP, with 24h changes correctly restated in each currency and the conversion rate always shown.
 - Search, category filter, sorting, a persistent watchlist, and asset pages with an interactive 7-day chart.
+- Animated segmented tabs (built with [Motion](https://motion.dev)) that are a native radio group underneath, and that respect reduced motion.
 - Responsive and accessible: keyboard-operable controls, sort state exposed to screen readers, live regions that don't spam, and light and dark themes.
 
 Design decisions, caching strategy and API quota calculations are in [DECISIONS.md](DECISIONS.md).
@@ -26,10 +28,10 @@ The app runs without an API key, using CoinGecko's keyless public API with lower
 
 ## Configuration
 
-| Variable                           | Default   | Description                                                                                                                                 |
-| ---------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `COINGECKO_API_KEY`                | _(empty)_ | CoinGecko Demo API key. It is read on the server only and never sent to the browser.                                                        |
-| `MARKETS_REFRESH_INTERVAL_SECONDS` | `300`     | How long a snapshot is served before refreshing (60 to 3600). The server warns at startup if the value could exceed the monthly Demo quota. |
+| Variable                           | Default   | Description                                                                                                                                                                       |
+| ---------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COINGECKO_API_KEY`                | _(empty)_ | CoinGecko Demo API key. It is read on the server only and never sent to the browser.                                                                                              |
+| `MARKETS_REFRESH_INTERVAL_SECONDS` | `300`     | How long a snapshot is served before refreshing (60 to 3600). Exchange rates refresh every 2 hours. The server warns at startup if the total could exceed the monthly Demo quota. |
 
 ## Scripts
 
@@ -47,26 +49,26 @@ The tests make no network calls: the upstream API is mocked with [MSW](https://m
 ## How it works
 
 ```
-Browser ──poll every 30s──▶ /api/markets ─┐
-                                          ├─▶ in-process SWR cache ──≤1 call / 5 min──▶ CoinGecko
-Browser ──────────────────▶ /api/coins/:id┘     (shared by all users)
+Browser ──poll every 30s──▶ /api/markets ─┐     in-process SWR caches, shared by all users
+                                          ├─▶ markets ──≤1 call / 5 min──▶ CoinGecko /coins/markets
+Browser ──────────────────▶ /api/coins/:id┘   rates   ──≤1 call / 2 h────▶ CoinGecko /simple/price
 ```
 
 ```
 src/
   app/                 Pages and route handlers (thin: they delegate to src/server)
-  server/              Server only: CoinGecko client, schema validation, SWR cache, metadata join
+  server/              Server only: CoinGecko client, schema validation, SWR caches, metadata join
   shared/              Wire types, categories, curated asset metadata
-  lib/                 Pure logic: formatting, freshness, sorting and aggregates, colour contrast
-  hooks/               Polling queries, watchlist storage, shared clock
-  components/          UI, split into dashboard, coin detail, freshness and primitives
+  lib/                 Pure logic: formatting, currency conversion, freshness, sorting, colour contrast
+  hooks/               Polling queries, watchlist and currency preferences, shared clock
+  components/          UI, split into dashboard, coin detail, currency, freshness and primitives (ui/)
 ```
 
 ## Known limitations
 
 - **The cache is per process.** Quota calculations assume one long-lived server. Running several instances, or serverless functions, multiplies upstream calls. See "First production improvements" in [DECISIONS.md](DECISIONS.md).
-- **Restarts empty the cache,** and each restart costs one upstream call.
-- **USD only.** The reasons are in [DECISIONS.md](DECISIONS.md).
+- **Restarts empty the caches,** and each restart costs two upstream calls.
+- **EUR and GBP values are converted from USD** at rates up to 2 hours old, and the 7-day chart uses today's rate. Details are in [DECISIONS.md](DECISIONS.md).
 - **Chart times are approximate.** The 7-day chart uses CoinGecko's sparkline, which has hourly points but no timestamps.
 - **The watchlist is per browser** (`localStorage`). There are no accounts.
 - **Metadata is curated by hand.** A new top-50 asset falls back to category C and a neutral colour until it is added.
