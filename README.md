@@ -18,7 +18,7 @@ Design decisions, caching strategy and API quota calculations are in [DECISIONS.
 
 ## Quick start
 
-You need Node.js 20.19 or later, and pnpm (`corepack enable` provides it).
+You need Node.js 22.13 or later (required by pnpm 11), and pnpm (`corepack enable` provides it).
 
 ```bash
 pnpm install

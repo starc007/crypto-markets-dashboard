@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         # The oldest supported version (package.json engines) and the current one.
-        node: ["20.19", "24"]
+        node: ["22.13", "24"]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
