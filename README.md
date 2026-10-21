@@ -3,7 +3,7 @@
 A dashboard of the top 50 cryptocurrencies by market capitalisation. Prices update automatically and the page states clearly how fresh they are. It is built with Next.js 16, React 19 and TypeScript, using market data from the [CoinGecko API](https://www.coingecko.com/en/api).
 
 - The top 50 assets, grouped into three categories (A, B and C), showing price, 24h change, volume and market cap.
-- Automatic refresh with a **Live / Delayed / Stale** status. Users are always told how old the data is and why.
+- Automatic refresh with an **Up to date / Delayed / Stale** status. Users are always told how old the data is and why.
 - Accurate formatting for very small prices and missing data, plus per-asset brand colours.
 - USD, EUR and GBP, with 24h changes correctly restated in each currency and the conversion rate always shown.
 - Search, category filter, sorting, a persistent watchlist, and asset pages with an interactive 7-day chart.

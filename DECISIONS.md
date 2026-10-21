@@ -34,11 +34,11 @@ The [cache](src/server/cache/swr-cache.ts) is an in-process stale-while-revalida
 
 Every response carries `fetchedAt` and `generatedAt`, both from the server's clock. The client computes age as `(generatedAt − fetchedAt) + time since it received the response`, so a wrong client clock can't make old data look fresh.
 
-| Status  | Age                         | What the user sees                                                    |
-| ------- | --------------------------- | --------------------------------------------------------------------- |
-| Live    | ≤ interval + 90 s (6.5 min) | Green dot and the time since the last update                          |
-| Delayed | ≤ 3 × interval (15 min)     | Warning banner with the cause, if known                               |
-| Stale   | > 15 min                    | Red banner telling users not to trade on the prices, and muted prices |
+| Status     | Age                         | What the user sees                                                    |
+| ---------- | --------------------------- | --------------------------------------------------------------------- |
+| Up to date | ≤ interval + 90 s (6.5 min) | Green dot, the time since the last update and the refresh schedule    |
+| Delayed    | ≤ 3 × interval (15 min)     | Warning banner with the cause, if known                               |
+| Stale      | > 15 min                    | Red banner telling users not to trade on the prices, and muted prices |
 
 Separately, a clock icon marks any asset that CoinGecko itself hasn't updated for over an hour.
 

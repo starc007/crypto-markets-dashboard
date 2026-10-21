@@ -208,6 +208,12 @@ describe("MarketDashboard", () => {
     expect(screen.getByText("Stale")).toBeInTheDocument();
   });
 
+  it("states the refresh schedule next to the data's age", () => {
+    renderDashboard();
+    expect(screen.getByText("Up to date")).toBeInTheDocument();
+    expect(screen.getByText("· refreshes every 5 min")).toBeInTheDocument();
+  });
+
   it("polls for new data and updates prices in place", async () => {
     renderDashboard();
     expect(within(rowFor("Bitcoin")).getByText("$83,321.00")).toBeInTheDocument();

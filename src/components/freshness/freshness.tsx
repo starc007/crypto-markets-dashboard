@@ -2,7 +2,7 @@
 
 import { useNow } from "@/hooks/use-now";
 import type { ApiError } from "@/lib/api-client";
-import { formatRelativeAge } from "@/lib/format";
+import { formatDuration, formatRelativeAge } from "@/lib/format";
 import { classifyFreshness, dataAgeMs, type Freshness } from "@/lib/freshness";
 import type { SnapshotMeta, UpstreamErrorCode } from "@/shared/market";
 import { AlertIcon } from "../ui/icons";
@@ -13,6 +13,8 @@ export interface FreshnessState {
   ageMs: number | null;
   /** Why data may be old, if we know. */
   reason: string | null;
+  /** How often the server refreshes, so "updated 4 min ago" reads as expected rather than broken. */
+  refreshIntervalMs: number;
 }
 
 const PROVIDER_REASONS: Record<UpstreamErrorCode, string> = {
@@ -38,10 +40,23 @@ export function useFreshness(
   if (clientError) reason = "We can't reach the server. Check your connection.";
   else if (meta.lastRefreshFailure) reason = PROVIDER_REASONS[meta.lastRefreshFailure.code];
 
-  return { freshness, ageMs: now === null ? null : ageMs, reason };
+  return {
+    freshness,
+    ageMs: now === null ? null : ageMs,
+    reason,
+    refreshIntervalMs: meta.refreshIntervalMs,
+  };
 }
 
-const LABELS: Record<Freshness, string> = { live: "Live", delayed: "Delayed", stale: "Stale" };
+/*
+ * "Up to date" rather than "Live": prices refresh every few minutes, and a
+ * trading UI shouldn't claim real-time data it doesn't have.
+ */
+const LABELS: Record<Freshness, string> = {
+  live: "Up to date",
+  delayed: "Delayed",
+  stale: "Stale",
+};
 const DOT_CLASS: Record<Freshness, string> = {
   live: "bg-up",
   delayed: "bg-amber-500",
@@ -49,17 +64,15 @@ const DOT_CLASS: Record<Freshness, string> = {
 };
 
 export function FreshnessIndicator({ state }: { state: FreshnessState }) {
-  const { freshness, ageMs } = state;
+  const { freshness, ageMs, refreshIntervalMs } = state;
   return (
-    <p className="inline-flex items-center gap-2 text-sm text-muted">
-      <span className="relative inline-flex size-2">
-        {freshness === "live" && (
-          <span className="absolute inset-0 animate-ping rounded-full bg-up opacity-60 motion-reduce:hidden" />
-        )}
-        <span className={`relative inline-flex size-2 rounded-full ${DOT_CLASS[freshness]}`} />
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
+      <span className="inline-flex items-center gap-2">
+        <span aria-hidden="true" className={`size-2 rounded-full ${DOT_CLASS[freshness]}`} />
+        <span className="font-medium text-fg">{LABELS[freshness]}</span>
       </span>
-      <span className="font-medium text-fg">{LABELS[freshness]}</span>
       {ageMs !== null && <span className="tabular-nums">· updated {formatRelativeAge(ageMs)}</span>}
+      <span>· refreshes every {formatDuration(refreshIntervalMs)}</span>
     </p>
   );
 }
