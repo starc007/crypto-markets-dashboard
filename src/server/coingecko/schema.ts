@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FxSnapshot } from "@/shared/currency";
 import type { MarketQuote } from "@/shared/market";
 
 /**
@@ -83,5 +84,44 @@ function toQuote(coin: CoinGeckoMarketCoin): MarketQuote {
     low24hUsd: coin.low_24h,
     circulatingSupply: coin.circulating_supply,
     lastUpdated: coin.last_updated,
+  };
+}
+
+const positiveNumber = z.number().positive();
+
+const fxSchema = z.object({
+  bitcoin: z.object({
+    usd: positiveNumber,
+    eur: positiveNumber,
+    gbp: positiveNumber,
+    usd_24h_change: nullableNumber,
+    eur_24h_change: nullableNumber,
+    gbp_24h_change: nullableNumber,
+  }),
+});
+
+/**
+ * Derives USD→EUR/GBP rates from Bitcoin's price in each currency, which is
+ * how CoinGecko itself converts between currencies. Comparing Bitcoin's 24h
+ * change in each currency gives the exchange rate's own 24h change:
+ *   rateChange = (1 + btcChangeInEur) / (1 + btcChangeInUsd) − 1
+ */
+export type FxRates = Omit<FxSnapshot, "fetchedAt">;
+
+export function parseFxRates(payload: unknown): FxRates | null {
+  const result = fxSchema.safeParse(payload);
+  if (!result.success) return null;
+  const btc = result.data.bitcoin;
+
+  const rateChange = (changeInCurrency: number | null): number | null =>
+    changeInCurrency === null || btc.usd_24h_change === null
+      ? null
+      : ((1 + changeInCurrency / 100) / (1 + btc.usd_24h_change / 100) - 1) * 100;
+
+  return {
+    rates: {
+      EUR: { perUsd: btc.eur / btc.usd, rateChange24hPct: rateChange(btc.eur_24h_change) },
+      GBP: { perUsd: btc.gbp / btc.usd, rateChange24hPct: rateChange(btc.gbp_24h_change) },
+    },
   };
 }

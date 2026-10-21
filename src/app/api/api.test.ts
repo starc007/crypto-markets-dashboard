@@ -4,8 +4,13 @@
  */
 import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { buildMarketsUrl } from "@/server/coingecko/client";
-import { createMarketsSource, setMarketsSourceForTesting } from "@/server/markets";
+import { buildFxUrl, buildMarketsUrl } from "@/server/coingecko/client";
+import { FX_REFRESH_INTERVAL_MS } from "@/server/config";
+import {
+  createMarketsSource,
+  setMarketsSourceForTesting,
+  type MarketsSource,
+} from "@/server/markets";
 import type { ApiErrorBody, CoinDetailResponse, MarketsResponse } from "@/shared/market";
 import fixture from "@/test/fixtures/coingecko-markets.json";
 import { GET as getCoin } from "./coins/[id]/route";
@@ -16,10 +21,25 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 const API_KEY = "test-demo-key";
 const REFRESH_MS = 300_000;
 const UPSTREAM = buildMarketsUrl();
+const FX_UPSTREAM = buildFxUrl();
+const FX_FIXTURE = {
+  bitcoin: {
+    usd: 80_000,
+    eur: 72_000,
+    gbp: 60_000,
+    usd_24h_change: 2,
+    eur_24h_change: 1.49,
+    gbp_24h_change: 2.51,
+  },
+};
 
 const upstream = {
   calls: [] as Request[],
   respond: (): Response | Promise<Response> => HttpResponse.json(fixture),
+};
+const fxUpstream = {
+  calls: [] as Request[],
+  respond: (): Response | Promise<Response> => HttpResponse.json(FX_FIXTURE),
 };
 
 const server = setupServer(
@@ -27,9 +47,14 @@ const server = setupServer(
     upstream.calls.push(request);
     return upstream.respond();
   }),
+  http.get(`${FX_UPSTREAM.origin}${FX_UPSTREAM.pathname}`, ({ request }) => {
+    fxUpstream.calls.push(request);
+    return fxUpstream.respond();
+  }),
 );
 
 let clock: number;
+let source: MarketsSource;
 const advance = (ms: number) => {
   clock += ms;
   vi.setSystemTime(clock);
@@ -44,14 +69,17 @@ beforeEach(() => {
   vi.setSystemTime(clock);
   upstream.calls = [];
   upstream.respond = () => HttpResponse.json(fixture);
-  setMarketsSourceForTesting(
-    createMarketsSource({ apiKey: API_KEY, refreshIntervalMs: REFRESH_MS }),
-  );
+  fxUpstream.calls = [];
+  fxUpstream.respond = () => HttpResponse.json(FX_FIXTURE);
+  source = createMarketsSource({ apiKey: API_KEY, refreshIntervalMs: REFRESH_MS });
+  setMarketsSourceForTesting(source);
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Let background refreshes finish so none outlives its test (or the mock server).
+  await Promise.all([source.markets.settled(), source.fx.settled()]);
   setMarketsSourceForTesting(undefined);
   vi.useRealTimers();
 });
@@ -181,6 +209,8 @@ describe("GET /api/markets", () => {
 
     advance(15_000);
     upstream.respond = () => HttpResponse.json(fixture);
+    fxUpstream.calls = [];
+    fxUpstream.respond = () => HttpResponse.json(FX_FIXTURE);
     const body = await json<MarketsResponse>(await getMarkets());
     expect(body.coins).toHaveLength(50);
     expect(body.meta.lastRefreshFailure).toBeNull();
@@ -195,6 +225,52 @@ describe("GET /api/markets", () => {
     };
     const body = await json<ApiErrorBody>(await getMarkets());
     expect(body.error.code).toBe("TIMEOUT");
+  });
+});
+
+describe("exchange rates", () => {
+  it("derives rates and their 24h change from one shared call", async () => {
+    const responses = await Promise.all(Array.from({ length: 100 }, () => getMarkets()));
+    const { fx } = await json<MarketsResponse>(responses[0]!);
+
+    expect(fxUpstream.calls).toHaveLength(1);
+    expect(new URL(fxUpstream.calls[0]!.url).search).toBe(FX_UPSTREAM.search);
+    expect(fxUpstream.calls[0]!.headers.get("x-cg-demo-api-key")).toBe(API_KEY);
+    expect(fx!.rates.EUR.perUsd).toBeCloseTo(0.9, 12);
+    // (1.0149 / 1.02 − 1) × 100: the euro price of a dollar fell 0.5%.
+    expect(fx!.rates.EUR.rateChange24hPct).toBeCloseTo(-0.5, 10);
+    expect(fx!.rates.GBP.rateChange24hPct).toBeCloseTo(0.5, 10);
+  });
+
+  it("refreshes rates every two hours, not with every price refresh", async () => {
+    await getMarkets();
+    for (let elapsed = 0; elapsed < FX_REFRESH_INTERVAL_MS - REFRESH_MS; elapsed += REFRESH_MS) {
+      advance(REFRESH_MS);
+      await getMarkets();
+      await settle();
+    }
+    expect(upstream.calls.length).toBeGreaterThan(20);
+    expect(fxUpstream.calls).toHaveLength(1);
+
+    advance(REFRESH_MS);
+    await getMarkets();
+    await settle();
+    expect(fxUpstream.calls).toHaveLength(2);
+  });
+
+  it("still serves prices when rates are unavailable", async () => {
+    fxUpstream.respond = () => new HttpResponse(null, { status: 500 });
+    const response = await getMarkets();
+    const body = await json<MarketsResponse>(response);
+
+    expect(response.status).toBe(200);
+    expect(body.coins).toHaveLength(50);
+    expect(body.fx).toBeNull();
+  });
+
+  it("rejects malformed rate payloads", async () => {
+    fxUpstream.respond = () => HttpResponse.json({ bitcoin: { usd: 0, eur: 1, gbp: 1 } });
+    expect((await json<MarketsResponse>(await getMarkets())).fx).toBeNull();
   });
 });
 

@@ -1,5 +1,6 @@
 import type { AccentColor } from "@/lib/color";
 import type { CategoryId } from "./categories";
+import type { FxSnapshot } from "./currency";
 
 /**
  * Wire contract between our API routes and the browser. Every numeric field is
@@ -55,7 +56,10 @@ export interface SnapshotMeta {
 }
 
 export interface MarketsResponse {
+  /** All values in USD; clients convert with `fx`. */
   coins: MarketCoin[];
+  /** USD exchange rates for the other supported currencies, or null if unavailable. */
+  fx: FxSnapshot | null;
   meta: SnapshotMeta;
 }
 
@@ -63,6 +67,7 @@ export interface CoinDetailResponse {
   coin: MarketCoin;
   /** Roughly hourly USD prices for the last 7 days, oldest first. */
   sparkline7d: number[] | null;
+  fx: FxSnapshot | null;
   meta: SnapshotMeta;
 }
 

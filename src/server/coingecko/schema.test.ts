@@ -1,5 +1,5 @@
 import fixture from "@/test/fixtures/coingecko-markets.json";
-import { parseMarkets } from "./schema";
+import { parseFxRates, parseMarkets } from "./schema";
 
 const row = (overrides: Record<string, unknown> = {}) => ({ ...fixture[0], ...overrides });
 
@@ -60,5 +60,43 @@ describe("parseMarkets", () => {
   it("returns null for payloads that are not a list of coins", () => {
     expect(parseMarkets({ status: { error_code: 429 } })).toBeNull();
     expect(parseMarkets(null)).toBeNull();
+  });
+});
+
+describe("parseFxRates", () => {
+  it("derives USD rates and their 24h change from Bitcoin's prices", () => {
+    const fx = parseFxRates({
+      bitcoin: {
+        usd: 83336.19243672618,
+        eur: 74211.21270967441,
+        gbp: 62219.30129041438,
+        usd_24h_change: 2.3037862945381167,
+        eur_24h_change: 2.1058817910531733,
+        gbp_24h_change: 1.9116221671586737,
+      },
+    })!;
+    expect(fx.rates.EUR.perUsd).toBeCloseTo(0.8905, 5);
+    expect(fx.rates.GBP.perUsd).toBeCloseTo(0.74661, 5);
+    expect(fx.rates.EUR.rateChange24hPct).toBeCloseTo(-0.19345, 4);
+  });
+
+  it("keeps rates but drops the change when a 24h change is missing", () => {
+    const fx = parseFxRates({
+      bitcoin: {
+        usd: 100,
+        eur: 90,
+        gbp: 80,
+        usd_24h_change: null,
+        eur_24h_change: 1,
+        gbp_24h_change: 1,
+      },
+    })!;
+    expect(fx.rates.EUR).toEqual({ perUsd: 0.9, rateChange24hPct: null });
+  });
+
+  it("rejects missing or non-positive prices", () => {
+    expect(parseFxRates({ bitcoin: { usd: 100, eur: 0, gbp: 80 } })).toBeNull();
+    expect(parseFxRates({ ethereum: {} })).toBeNull();
+    expect(parseFxRates(null)).toBeNull();
   });
 });

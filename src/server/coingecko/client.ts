@@ -1,13 +1,13 @@
 import "server-only";
 import { UpstreamError, parseRetryAfter } from "./errors";
-import { parseMarkets, type ParsedMarkets } from "./schema";
+import { parseFxRates, parseMarkets, type FxRates, type ParsedMarkets } from "./schema";
 
 export const COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3";
 export const TOP_N = 50;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
- * The only upstream request this application makes. Parameters are fixed
+ * The main upstream request. Parameters here and in `buildFxUrl` are fixed
  * server-side: nothing from the incoming request is forwarded, so our API
  * cannot be used as a general-purpose CoinGecko proxy.
  *
@@ -28,11 +28,27 @@ export function buildMarketsUrl(): URL {
   return url;
 }
 
-export async function fetchTopMarkets(apiKey: string | undefined): Promise<ParsedMarkets> {
+/**
+ * Bitcoin's price in each supported currency, plus 24h changes. From this we
+ * derive exchange rates and how they moved (see `parseFxRates`). One small
+ * call serves every currency, instead of one /coins/markets call per currency.
+ */
+export function buildFxUrl(): URL {
+  const url = new URL(`${COINGECKO_BASE_URL}/simple/price`);
+  url.search = new URLSearchParams({
+    ids: "bitcoin",
+    vs_currencies: "usd,eur,gbp",
+    include_24hr_change: "true",
+    precision: "full",
+  }).toString();
+  return url;
+}
+
+async function getJson(url: URL, apiKey: string | undefined): Promise<unknown> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey) headers["x-cg-demo-api-key"] = apiKey;
 
-  const response = await fetch(buildMarketsUrl(), {
+  const response = await fetch(url, {
     headers,
     // Our own cache decides freshness; never let the framework layer another one on top.
     cache: "no-store",
@@ -41,18 +57,25 @@ export async function fetchTopMarkets(apiKey: string | undefined): Promise<Parse
 
   if (!response.ok) throw errorForStatus(response);
 
-  let payload: unknown;
   try {
-    payload = await response.json();
+    return await response.json();
   } catch (cause) {
     throw new UpstreamError("INVALID_RESPONSE", "CoinGecko returned invalid JSON", { cause });
   }
+}
 
-  const parsed = parseMarkets(payload);
+export async function fetchTopMarkets(apiKey: string | undefined): Promise<ParsedMarkets> {
+  const parsed = parseMarkets(await getJson(buildMarketsUrl(), apiKey));
   if (!parsed || parsed.quotes.length === 0) {
     // An empty or malformed payload must not replace a good snapshot.
     throw new UpstreamError("INVALID_RESPONSE", "CoinGecko returned no usable market data");
   }
+  return parsed;
+}
+
+export async function fetchFxRates(apiKey: string | undefined): Promise<FxRates> {
+  const parsed = parseFxRates(await getJson(buildFxUrl(), apiKey));
+  if (!parsed) throw new UpstreamError("INVALID_RESPONSE", "CoinGecko returned no usable FX rates");
   return parsed;
 }
 

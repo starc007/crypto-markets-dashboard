@@ -3,7 +3,14 @@ import { z } from "zod";
 
 /** CoinGecko Demo plan: 10,000 successful calls per month (100 per minute). */
 export const DEMO_MONTHLY_QUOTA = 10_000;
-const LONGEST_MONTH_MINUTES = 31 * 24 * 60;
+const LONGEST_MONTH_MS = 31 * 24 * 60 * 60_000;
+
+/**
+ * Exchange rates move far less than crypto prices, so they refresh rarely.
+ * Two hours costs 372 calls a month and keeps the 5-minute market refresh
+ * inside the quota (see DECISIONS.md).
+ */
+export const FX_REFRESH_INTERVAL_MS = 2 * 60 * 60_000;
 
 const envSchema = z.object({
   COINGECKO_API_KEY: z
@@ -19,9 +26,12 @@ export interface ServerConfig {
   refreshIntervalMs: number;
 }
 
-/** Worst case: one refresh per interval, all month, from a single instance. */
-export function projectedMonthlyCalls(refreshIntervalMs: number): number {
-  return Math.ceil((LONGEST_MONTH_MINUTES * 60_000) / refreshIntervalMs);
+/** Worst case: one refresh of each cache per interval, all month, from a single instance. */
+export function projectedMonthlyCalls(marketsIntervalMs: number): number {
+  return (
+    Math.ceil(LONGEST_MONTH_MS / marketsIntervalMs) +
+    Math.ceil(LONGEST_MONTH_MS / FX_REFRESH_INTERVAL_MS)
+  );
 }
 
 let cached: ServerConfig | undefined;

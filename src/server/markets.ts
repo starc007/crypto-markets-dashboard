@@ -1,4 +1,5 @@
 import "server-only";
+import type { FxSnapshot } from "@/shared/currency";
 import type {
   CoinDetailResponse,
   MarketsResponse,
@@ -6,16 +7,15 @@ import type {
   SnapshotMeta,
 } from "@/shared/market";
 import { CacheEmptyError, createSwrCache, type CacheRead, type SwrCache } from "./cache/swr-cache";
-import { fetchTopMarkets } from "./coingecko/client";
+import { fetchFxRates, fetchTopMarkets } from "./coingecko/client";
 import { UpstreamError, toUpstreamError } from "./coingecko/errors";
-import type { ParsedMarkets } from "./coingecko/schema";
-import { getServerConfig } from "./config";
+import type { FxRates, ParsedMarkets } from "./coingecko/schema";
+import { FX_REFRESH_INTERVAL_MS, getServerConfig } from "./config";
 import { enrichQuote } from "./enrich";
 
-type MarketsCache = SwrCache<ParsedMarkets, UpstreamError>;
-
 export interface MarketsSource {
-  cache: MarketsCache;
+  markets: SwrCache<ParsedMarkets, UpstreamError>;
+  fx: SwrCache<FxRates, UpstreamError>;
   refreshIntervalMs: number;
 }
 
@@ -44,12 +44,20 @@ export class MarketDataUnavailableError extends Error {
   }
 }
 
+function logAndConvert(label: string) {
+  return (thrown: unknown) => {
+    const error = toUpstreamError(thrown);
+    console.error(`[${label}] Refresh failed (${error.code}): ${error.message}`);
+    return error;
+  };
+}
+
 export function createMarketsSource(options: {
   apiKey: string | undefined;
   refreshIntervalMs: number;
   now?: () => number;
 }): MarketsSource {
-  const cache = createSwrCache({
+  const markets = createSwrCache({
     fetcher: async () => {
       const parsed = await fetchTopMarkets(options.apiKey);
       if (parsed.rejectedRows > 0) {
@@ -59,21 +67,26 @@ export function createMarketsSource(options: {
     },
     ttlMs: options.refreshIntervalMs,
     retryDelayMs,
-    toError: (thrown) => {
-      const error = toUpstreamError(thrown);
-      console.error(`[markets] Refresh failed (${error.code}): ${error.message}`);
-      return error;
-    },
+    toError: logAndConvert("markets"),
     now: options.now,
   });
-  return { cache, refreshIntervalMs: options.refreshIntervalMs };
+
+  const fx = createSwrCache({
+    fetcher: () => fetchFxRates(options.apiKey),
+    ttlMs: FX_REFRESH_INTERVAL_MS,
+    retryDelayMs,
+    toError: logAndConvert("fx"),
+    now: options.now,
+  });
+
+  return { markets, fx, refreshIntervalMs: options.refreshIntervalMs };
 }
 
 /*
  * Route handlers and server components can be bundled separately, so a plain
- * module-level variable may exist more than once per process. Pinning the cache
- * on globalThis guarantees a single shared cache (and in-flight request) per
- * server process, which is what the quota calculation relies on.
+ * module-level variable may exist more than once per process. Pinning the
+ * source on globalThis guarantees one shared set of caches (and in-flight
+ * requests) per server process, which is what the quota calculation relies on.
  */
 const globalStore = globalThis as typeof globalThis & { __marketsSource?: MarketsSource };
 
@@ -87,12 +100,44 @@ export function setMarketsSourceForTesting(source: MarketsSource | undefined): v
   globalStore.__marketsSource = source;
 }
 
-type SnapshotRead = CacheRead<ParsedMarkets, UpstreamError> & { refreshIntervalMs: number };
+interface Snapshot {
+  markets: CacheRead<ParsedMarkets, UpstreamError>;
+  /** Null when rates have never loaded; the UI then offers USD only. */
+  fx: FxSnapshot | null;
+  refreshIntervalMs: number;
+}
 
-async function readSnapshot(): Promise<SnapshotRead> {
+/** How long a request may wait for rates on a cold start before answering USD-only. */
+const FX_WAIT_BUDGET_MS = 1_500;
+
+/**
+ * Rates are optional: missing or slow rates must never take prices down with
+ * them. A cold fetch still completes in the background for later requests.
+ */
+async function readFx(source: MarketsSource): Promise<FxSnapshot | null> {
+  const read = source.fx.get().then(
+    (r): FxSnapshot => ({ ...r.value, fetchedAt: new Date(r.fetchedAt).toISOString() }),
+    (error: unknown) => {
+      if (error instanceof CacheEmptyError) return null;
+      throw error;
+    },
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), FX_WAIT_BUDGET_MS);
+  });
+  try {
+    return await Promise.race([read, budget]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readSnapshot(): Promise<Snapshot> {
   const source = getMarketsSource();
   try {
-    return { ...(await source.cache.get()), refreshIntervalMs: source.refreshIntervalMs };
+    const [markets, fx] = await Promise.all([source.markets.get(), readFx(source)]);
+    return { markets, fx, refreshIntervalMs: source.refreshIntervalMs };
   } catch (error) {
     if (error instanceof CacheEmptyError) {
       const { failure } = error as CacheEmptyError<UpstreamError>;
@@ -102,23 +147,28 @@ async function readSnapshot(): Promise<SnapshotRead> {
   }
 }
 
-function toMeta(read: SnapshotRead, now: number): SnapshotMeta {
-  const failure: RefreshFailure | null = read.failure && {
-    code: read.failure.error.code,
-    at: new Date(read.failure.at).toISOString(),
-    retryAt: new Date(read.failure.retryAt).toISOString(),
+function toMeta(snapshot: Snapshot, now: number): SnapshotMeta {
+  const { markets } = snapshot;
+  const failure: RefreshFailure | null = markets.failure && {
+    code: markets.failure.error.code,
+    at: new Date(markets.failure.at).toISOString(),
+    retryAt: new Date(markets.failure.retryAt).toISOString(),
   };
   return {
-    fetchedAt: new Date(read.fetchedAt).toISOString(),
+    fetchedAt: new Date(markets.fetchedAt).toISOString(),
     generatedAt: new Date(now).toISOString(),
-    refreshIntervalMs: read.refreshIntervalMs,
+    refreshIntervalMs: snapshot.refreshIntervalMs,
     lastRefreshFailure: failure,
   };
 }
 
 export async function getMarkets(now = Date.now()): Promise<MarketsResponse> {
-  const read = await readSnapshot();
-  return { coins: read.value.quotes.map(enrichQuote), meta: toMeta(read, now) };
+  const snapshot = await readSnapshot();
+  return {
+    coins: snapshot.markets.value.quotes.map(enrichQuote),
+    fx: snapshot.fx,
+    meta: toMeta(snapshot, now),
+  };
 }
 
 /** Returns null for ids outside the current top 50: we only serve what we already hold. */
@@ -126,12 +176,13 @@ export async function getCoinDetail(
   id: string,
   now = Date.now(),
 ): Promise<CoinDetailResponse | null> {
-  const read = await readSnapshot();
-  const quote = read.value.quotes.find((q) => q.id === id);
+  const snapshot = await readSnapshot();
+  const quote = snapshot.markets.value.quotes.find((q) => q.id === id);
   if (!quote) return null;
   return {
     coin: enrichQuote(quote),
-    sparkline7d: read.value.sparklines.get(id) ?? null,
-    meta: toMeta(read, now),
+    sparkline7d: snapshot.markets.value.sparklines.get(id) ?? null,
+    fx: snapshot.fx,
+    meta: toMeta(snapshot, now),
   };
 }
