@@ -49,14 +49,16 @@
 }
 
 body {
-  background:
-    radial-gradient(1200px 400px at 50% -120px, rgb(99 102 241 / 0.07), transparent 70%), var(--bg);
+  background: var(--bg);
   color: var(--text);
 }
 
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+/* In the base layer so components can replace it (e.g. inputs use a ring instead). */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
 }
 
 /*

@@ -55,7 +55,7 @@ export function Toolbar(props: ToolbarProps) {
           placeholder="Search name or symbol"
           autoComplete="off"
           spellCheck={false}
-          className="h-10 w-full rounded-lg border border-border bg-surface pr-3 pl-9 text-sm shadow-card transition-shadow placeholder:text-muted focus:border-focus/50 focus:ring-4 focus:ring-focus/10 focus:outline-none"
+          className="h-10 w-full rounded-lg border border-border bg-surface pr-3 pl-9 text-sm shadow-card transition-[border-color,box-shadow] placeholder:text-muted focus:border-focus focus:ring-3 focus:ring-focus/15 focus:outline-none"
         />
       </div>
 

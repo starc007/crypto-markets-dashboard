@@ -10,7 +10,7 @@ import { PriceChange } from "../ui/price-change";
 import type { ReactNode } from "react";
 
 const BADGE_TONE: Record<CategoryId, string> = {
-  A: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+  A: "bg-sky-50 text-sky-800 ring-sky-200",
   B: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   C: "bg-amber-50 text-amber-800 ring-amber-200",
 };
