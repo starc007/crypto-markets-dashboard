@@ -25,7 +25,8 @@ import { ErrorState } from "../ui/error-state";
 import { CategorySection } from "./category-section";
 import { DashboardSkeleton } from "./dashboard-skeleton";
 import { MarketTable } from "./market-table";
-import { Toolbar, type CategoryFilter } from "./toolbar";
+import { MarketHeatmap } from "./market-heatmap";
+import { Toolbar, type CategoryFilter, type DashboardView } from "./toolbar";
 
 interface MarketDashboardProps {
   initialData: MarketsResponse | null;
@@ -64,6 +65,7 @@ function MarketsView({
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [view, setView] = useState<DashboardView>("table");
   const { watchlist, toggle } = useWatchlist();
   const freshness = useFreshness(data.meta, data.receivedAt, clientError);
   const { currency: requestedCurrency, setCurrency } = useCurrencyPreference(initialCurrency);
@@ -119,6 +121,8 @@ function MarketsView({
         watchlistCount={watchlist.size}
         sort={sort}
         onSortChange={setSort}
+        view={view}
+        onViewChange={setView}
       />
 
       <p className="sr-only" role="status" aria-live="polite">
@@ -150,6 +154,12 @@ function MarketsView({
             Clear filters
           </button>
         </motion.div>
+      ) : view === "heatmap" ? (
+        <MarketHeatmap
+          groups={visibleGroups}
+          currency={currency}
+          isStale={freshness.freshness === "stale"}
+        />
       ) : (
         <AnimatePresence initial={false}>
           {CATEGORY_IDS.filter((id) => visibleGroups[id].length > 0).map((id, index) => (

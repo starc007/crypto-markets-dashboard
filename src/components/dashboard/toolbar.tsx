@@ -7,10 +7,11 @@ import {
   type SortState,
 } from "@/lib/market-view";
 import { CATEGORIES, CATEGORY_IDS, type CategoryId } from "@/shared/categories";
-import { SearchIcon, StarIcon } from "../ui/icons";
+import { HeatmapIcon, SearchIcon, StarIcon, TableIcon } from "../ui/icons";
 import { Tabs, type TabOption } from "../ui/tabs";
 
 export type CategoryFilter = CategoryId | "all";
+export type DashboardView = "table" | "heatmap";
 
 interface ToolbarProps {
   query: string;
@@ -22,6 +23,8 @@ interface ToolbarProps {
   watchlistCount: number;
   sort: SortState;
   onSortChange: (sort: SortState) => void;
+  view: DashboardView;
+  onViewChange: (view: DashboardView) => void;
 }
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -31,6 +34,25 @@ const SORT_LABELS: Record<SortKey, string> = {
   volume: "Volume",
   name: "Name",
 };
+
+const VIEW_OPTIONS: TabOption<DashboardView>[] = [
+  {
+    value: "table",
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <TableIcon className="size-3.5" /> Table
+      </span>
+    ),
+  },
+  {
+    value: "heatmap",
+    label: (
+      <span className="inline-flex items-center gap-1.5">
+        <HeatmapIcon className="size-3.5" /> Heatmap
+      </span>
+    ),
+  },
+];
 
 const CATEGORY_OPTIONS: TabOption<CategoryFilter>[] = [
   { value: "all", label: "All" },
@@ -82,8 +104,10 @@ export function Toolbar(props: ToolbarProps) {
           <span className="tabular-nums">({props.watchlistCount})</span>
         </button>
 
-        {/* Column headers sort on larger screens; small screens hide some columns. */}
-        <div className="flex items-center gap-2 sm:hidden">
+        {/* Column headers sort on larger screens; small screens hide some columns. The heatmap has no order. */}
+        <div
+          className={`flex items-center gap-2 sm:hidden ${props.view === "heatmap" ? "hidden" : ""}`}
+        >
           <label htmlFor="sort-select" className="text-sm text-muted">
             Sort
           </label>
@@ -108,6 +132,14 @@ export function Toolbar(props: ToolbarProps) {
           </select>
         </div>
       </div>
+
+      <Tabs
+        label="View"
+        options={VIEW_OPTIONS}
+        value={props.view}
+        onChange={props.onViewChange}
+        className="self-start md:ml-auto md:self-auto"
+      />
     </div>
   );
 }

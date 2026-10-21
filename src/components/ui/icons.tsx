@@ -72,3 +72,19 @@ export const ChevronLeftIcon = (p: IconProps) => (
     <path d="M10 3.5L5.5 8l4.5 4.5" />
   </Icon>
 );
+
+export const TableIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2" y="3" width="12" height="10" rx="1.5" />
+    <path d="M2 6.5h12M2 10h12" />
+  </Icon>
+);
+
+export const HeatmapIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2" y="2.5" width="7" height="6.5" rx="1" />
+    <rect x="10.5" y="2.5" width="3.5" height="4" rx="1" />
+    <rect x="10.5" y="8" width="3.5" height="5.5" rx="1" />
+    <rect x="2" y="10.5" width="7" height="3" rx="1" />
+  </Icon>
+);
